@@ -62,7 +62,7 @@ if lookup_button:
         try:
             with st.spinner("Dược sĩ AI đang tổng hợp thông tin, vui lòng chờ..."):
                 # Thiết lập mô hình AI
-                model = genai.GenerativeModel('gemini-1.5-pro')
+                model = genai.GenerativeModel('gemini-2.5-pro')
 
                 # Tạo câu lệnh hoàn chỉnh để gửi cho AI (sử dụng prompt rút gọn)
                 full_prompt = f"{PROMPT_GOC_RUT_GON}\n\nHãy tra cứu và trình bày thông tin cho thuốc sau đây: **{drug_name}**"
@@ -85,3 +85,4 @@ if lookup_button:
             # Xử lý các lỗi không xác định khác
             st.error("Đã có lỗi không xác định xảy ra. Vui lòng kiểm tra lại.")
             st.exception(e) # In ra lỗi chi tiết để chúng ta gỡ rối
+
