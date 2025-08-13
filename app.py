@@ -52,7 +52,7 @@ if lookup_button:
         # Khối try-except đơn giản để bắt mọi lỗi
         try:
             with st.spinner("Dược sĩ AI đang tổng hợp thông tin..."):
-                model = genai.GenerativeModel('gemini-1.5-flash')
+                model = genai.GenerativeModel('gemini-2.5-flash-lite')
                 full_prompt = f"{PROMPT_GOC_RUT_GON}\n\nHãy tra cứu và trình bày thông tin cho thuốc sau đây: **{drug_name}**"
                 response = model.generate_content(full_prompt)
                 st.markdown(response.text)
@@ -62,6 +62,7 @@ if lookup_button:
             st.error("Rất tiếc, đã có lỗi xảy ra trong quá trình tra cứu. Vui lòng thử lại sau ít phút.")
             # Dòng sau giúp chúng ta xem lỗi chi tiết là gì, nhưng người dùng không cần thấy
             st.exception(e)
+
 
 
 
