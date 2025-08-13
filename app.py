@@ -78,7 +78,7 @@ Khi tôi đưa tên một loại thuốc, bạn **PHẢI** trình bày kết qu�
 st.set_page_config(page_title="Dược Điển AI", page_icon="💊", layout="wide")
 
 st.title("💊 Dược Điển AI - Tra Cứu Dược Lý Thông Minh")
-st.write("Cung cấp thông tin thuốc nhanh chóng, đáng tin cậy cho chuyên gia y tế. Phát triển bởi [tên của bạn] và cộng sự AI.")
+st.write("Cung cấp thông tin thuốc nhanh chóng, đáng tin cậy cho chuyên gia y tế. Phát triển bởi Group CACK và cộng sự AI.")
 
 # Kiểm tra xem API đã được cấu hình đúng cách chưa
 if not is_api_configured:
@@ -108,3 +108,4 @@ else:
                 except Exception as e:
 
                     st.error(f"Đã có lỗi xảy ra trong quá trình gọi AI: {e}")
+
