@@ -6,7 +6,7 @@ import google.generativeai as genai
 try:
     api_key = st.secrets["GOOGLE_API_KEY"]
     genai.configure(api_key=api_key)
-    # ===== THAY ĐỔI 1: Nâng cấp model lên gemini-1.5-pro =====
+    # Nâng cấp model lên gemini-1.5-pro
     model = genai.GenerativeModel('gemini-2.5-pro')
     is_api_configured = True
 except (KeyError, AttributeError):
@@ -72,7 +72,6 @@ Khi tôi đưa tên một loại thuốc, bạn **PHẢI** trình bày kết qu�
 st.set_page_config(page_title="Dược Điển AI", page_icon="💊", layout="wide")
 
 st.title("💊 Dược Điển AI - Tra Cứu Dược Lý Thông Minh")
-# ===== THAY ĐỔI 2: Cập nhật tên nhóm phát triển =====
 st.write("Cung cấp thông tin thuốc nhanh chóng, đáng tin cậy cho chuyên gia y tế. Phát triển bởi group CÂCK và cộng sự AI.")
 
 if not is_api_configured:
@@ -94,11 +93,17 @@ else:
                         "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE",
                     }
                     
+                    # ===== THAY ĐỔI MỚI: Tăng giới hạn token cho câu trả lời =====
+                    generation_config = {
+                        "max_output_tokens": 8192,
+                    }
+
                     full_prompt = PROMPT_GOC + "\n\n" + f"Hãy tra cứu thông tin về thuốc sau: **{ten_thuoc}**"
                     
-                    # Gọi API của Gemini với cài đặt an toàn
+                    # Gọi API của Gemini với cả cài đặt an toàn và cấu hình tạo văn bản
                     response = model.generate_content(
                         full_prompt,
+                        generation_config=generation_config, # Thêm cấu hình token
                         safety_settings=safety_settings
                     )
                     
@@ -112,4 +117,3 @@ else:
                      st.error("Lỗi: Phản hồi từ AI đã bị chặn bởi bộ lọc an toàn. Điều này có thể xảy ra với các loại thuốc có thông tin nhạy cảm. Chúng tôi đang làm việc để cải thiện vấn đề này.")
                 except Exception as e:
                     st.error(f"Đã có lỗi xảy ra trong quá trình gọi AI: {e}")
-
