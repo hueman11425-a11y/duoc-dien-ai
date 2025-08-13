@@ -11,7 +11,7 @@ try:
     # Lấy API key từ Streamlit Secrets
     api_key = st.secrets["GOOGLE_API_KEY"]
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-pro')
+    model = genai.GenerativeModel('gemini-2.5-pro')
     # Cờ để kiểm tra xem API key có hợp lệ không
     is_api_configured = True
 except (KeyError, AttributeError):
@@ -106,4 +106,5 @@ else:
                     st.divider()
 
                 except Exception as e:
+
                     st.error(f"Đã có lỗi xảy ra trong quá trình gọi AI: {e}")
