@@ -10,7 +10,7 @@ except (FileNotFoundError, KeyError):
     st.error("LỖI: Vui lòng tạo file .streamlit/secrets.toml và thêm `GOOGLE_API_KEY = 'KEY_CUA_BAN'` vào đó.")
     st.stop()
 
-# Prompt MỚI: Chỉ dùng để nhận diện hoạt chất từ biệt dược
+# (Các PROMPT không thay đổi, giữ nguyên như cũ)
 PROMPT_NHAN_DIEN = """Từ tên thuốc sau đây, hãy trích xuất (các) hoạt chất gốc. 
 Chỉ trả về tên (các) hoạt chất, phân cách bằng dấu phẩy nếu có nhiều hoạt chất. 
 TUYỆT ĐỐI không giải thích, không thêm bất kỳ từ nào khác.
@@ -26,8 +26,6 @@ Output: Losartan, Amlodipine
 Input: {drug_name}
 Output:"""
 
-
-# Prompt gốc - Dùng để phân tích chi tiết sau khi đã có tên hoạt chất
 PROMPT_GOC_RUT_GON = """
 Bạn là một Dược sĩ lâm sàng AI chuyên nghiệp và là chuyên gia trong việc tổng hợp thông tin y khoa.
 Nhiệm vụ của bạn là tra cứu và phân tích thông tin về một loại thuốc mà tôi cung cấp.
@@ -52,42 +50,62 @@ Khi tôi đưa tên một loại thuốc (luôn là tên gốc/hoạt chất), b
 - Luôn ưu tiên thông tin được chấp thuận bởi FDA.
 """
 
-# --- 2. GIAO DIỆN NGƯỜI DÙNG ---
+# --- 2. CÁC HÀM XỬ LÝ (ĐÃ TỐI ƯU VỚI CACHE) ---
 
-st.title("Dược Điển AI (Bản nâng cấp)")
+@st.cache_resource
+def get_model():
+    """
+    Khởi tạo và cache model AI. Model chỉ được tạo một lần duy nhất.
+    """
+    print("--- Khởi tạo model AI ---") # Dòng này để chứng minh hàm chỉ chạy 1 lần
+    return genai.GenerativeModel('gemini-2.5-flash-lite')
+
+@st.cache_data
+def get_drug_info(drug_name):
+    """
+    Thực hiện quy trình tra cứu 2 bước và cache kết quả.
+    Hàm này chỉ chạy lại khi `drug_name` là một giá trị mới.
+    """
+    print(f"--- Thực hiện tra cứu API cho: {drug_name} ---") # Dòng này chứng minh hàm chỉ chạy khi có thuốc mới
+    model = get_model()
+
+    # Bước 1: Nhận diện hoạt chất
+    prompt_nhan_dien_final = PROMPT_NHAN_DIEN.format(drug_name=drug_name)
+    response_nhan_dien = model.generate_content(prompt_nhan_dien_final)
+    hoat_chat_goc = response_nhan_dien.text.strip()
+
+    if not hoat_chat_goc or "không tìm thấy" in hoat_chat_goc.lower():
+        return f"Lỗi: Không thể xác định được hoạt chất cho '{drug_name}'."
+
+    # Bước 2: Phân tích chi tiết hoạt chất
+    full_prompt = f"{PROMPT_GOC_RUT_GON}\n\nHãy tra cứu và trình bày thông tin cho thuốc sau đây: **{hoat_chat_goc}**"
+    response_phan_tich = model.generate_content(full_prompt)
+    
+    # Thêm thông báo nhận diện vào đầu kết quả
+    final_response = f"✅ Đã nhận diện hoạt chất: **{hoat_chat_goc}**\n\n---\n\n{response_phan_tich.text}"
+    return final_response
+
+
+# --- 3. GIAO DIỆN VÀ LOGIC CHÍNH ---
+
+st.title("Dược Điển AI (Cache Enabled ⚡)")
 st.caption("Dự án được phát triển bởi group CÂCK và AI")
 
 drug_name_input = st.text_input("Nhập tên thuốc (biệt dược hoặc hoạt chất):")
 lookup_button = st.button("Tra cứu")
-
-# --- 3. LOGIC CỐT LÕI (ĐÃ NÂNG CẤP) ---
 
 if lookup_button:
     if not drug_name_input:
         st.warning("Vui lòng nhập tên thuốc trước khi tra cứu.")
     else:
         try:
-            model = genai.GenerativeModel('gemini-2.5-flash-lite')
-
-            # --- BƯỚC 1: NHẬN DIỆN HOẠT CHẤT ---
-            with st.spinner(f"Đang nhận diện hoạt chất trong '{drug_name_input}'..."):
-                prompt_nhan_dien_final = PROMPT_NHAN_DIEN.format(drug_name=drug_name_input)
-                response_nhan_dien = model.generate_content(prompt_nhan_dien_final)
-                # Dọn dẹp output, chỉ lấy text và xóa khoảng trắng thừa
-                hoat_chat_goc = response_nhan_dien.text.strip()
-
-            if not hoat_chat_goc or "không tìm thấy" in hoat_chat_goc.lower():
-                 st.error(f"Không thể xác định được hoạt chất cho '{drug_name_input}'. Vui lòng thử lại với tên khác.")
-            else:
-                st.info(f"✅ Đã nhận diện hoạt chất: **{hoat_chat_goc}**")
-
-                # --- BƯỚC 2: PHÂN TÍCH CHI TIẾT HOẠT CHẤT ĐÃ TÌM ĐƯỢC ---
-                with st.spinner(f"Dược sĩ AI đang tổng hợp thông tin chi tiết về '{hoat_chat_goc}'..."):
-                    full_prompt = f"{PROMPT_GOC_RUT_GON}\n\nHãy tra cứu và trình bày thông tin cho thuốc sau đây: **{hoat_chat_goc}**"
-                    response_phan_tich = model.generate_content(full_prompt)
-                    st.markdown(response_phan_tich.text)
+            with st.spinner("Dược sĩ AI đang làm việc, vui lòng chờ..."):
+                # Gọi hàm đã được cache
+                final_result = get_drug_info(drug_name_input)
+            
+            # Hiển thị kết quả
+            st.markdown(final_result)
 
         except Exception as e:
-            st.error("Rất tiếc, đã có lỗi xảy ra trong quá trình tra cứu. Vui lòng thử lại sau ít phút.")
-            st.exception(e) # Dòng này giúp bạn thấy lỗi chi tiết khi lập trình
-
+            st.error("Rất tiếc, đã có lỗi xảy ra trong quá trình tra cứu.")
+            st.exception(e)
