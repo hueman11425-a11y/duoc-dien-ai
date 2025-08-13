@@ -1,5 +1,6 @@
 # --- Thư viện cần thiết ---
 import streamlit as st
+import google.generativeai as genai # <<< DÒNG LỆNH QUAN TRỌNG BỊ THIẾU ĐÃ ĐƯỢC THÊM LẠI
 import requests 
 import json
 import time
@@ -54,11 +55,10 @@ def get_fda_data(drug_name):
         st.error(f"Lỗi khi gọi API openFDA: {e}")
         return None
 
-# --- Hàm MỚI - Bước 3A: Tìm kiếm nghiên cứu trên PubMed ---
+# --- Hàm Bước 3A: Tìm kiếm nghiên cứu trên PubMed ---
 def get_recent_studies_from_pubmed(drug_name, num_studies=3):
     """Tìm các ID bài báo mới nhất từ PubMed."""
     base_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
-    # Tìm kiếm các bài báo trong 2 năm gần đây
     two_years_ago = (datetime.now() - timedelta(days=730)).strftime('%Y/%m/%d')
     search_term = f'("{drug_name}"[Title/Abstract]) AND ("{two_years_ago}"[Date - Publication] : "3000"[Date - Publication])'
     
@@ -78,7 +78,7 @@ def get_recent_studies_from_pubmed(drug_name, num_studies=3):
         st.warning(f"Không thể tìm kiếm trên PubMed: {e}")
         return []
 
-# --- Hàm MỚI - Bước 3B: Lấy chi tiết và tóm tắt bằng Gemini ---
+# --- Hàm Bước 3B: Lấy chi tiết và tóm tắt bằng Gemini ---
 def summarize_studies_with_gemini(pmids):
     """Lấy chi tiết bài báo và dùng Gemini để tóm tắt."""
     if not pmids or not gemini_model:
@@ -90,7 +90,6 @@ def summarize_studies_with_gemini(pmids):
     try:
         response = requests.get(base_url + "efetch.fcgi", params=summary_params)
         response.raise_for_status()
-        # Do API PubMed trả về XML hơi phức tạp, ta chỉ lấy văn bản thô để AI xử lý
         raw_text = response.text
 
         prompt = f"""
@@ -118,7 +117,6 @@ if st.button("Tra cứu thuốc"):
     if not ten_thuoc:
         st.warning("Vui lòng nhập tên thuốc.")
     else:
-        # Bước 1
         standard_name, rxcui = get_rxcui_from_name(ten_thuoc)
         if not rxcui:
             st.error(f"Không tìm thấy thuốc '{ten_thuoc}'.")
@@ -126,19 +124,16 @@ if st.button("Tra cứu thuốc"):
             st.success(f"Bước 1: Tìm thấy tên gốc '{standard_name}' (RxCUI: {rxcui})")
             time.sleep(1)
             
-            # Bước 2
             fda_data = get_fda_data(standard_name)
             if fda_data:
                 st.success(f"Bước 2: Đã tìm thấy dữ liệu từ FDA!")
                 time.sleep(1)
 
-                # Bước 3
                 with st.spinner("Bước 3: Đang tìm và tóm tắt các nghiên cứu mới nhất..."):
                     pmids = get_recent_studies_from_pubmed(standard_name)
                     summary = summarize_studies_with_gemini(pmids)
                 st.success("Bước 3 hoàn thành!")
 
-                # Hiển thị kết quả
                 st.subheader("Kết quả tra cứu sơ bộ")
                 with st.expander("Chỉ định (từ FDA)"):
                     st.markdown(fda_data.get('indications_and_usage', ['Không có.'])[0])
