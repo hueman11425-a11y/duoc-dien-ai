@@ -38,6 +38,8 @@ Khi tôi đưa tên một loại thuốc (có thể là tên gốc hoặc biệt
 # --- 2. GIAO DIỆN NGƯỜI DÙNG ---
 
 st.title("Dược Điển AI")
+st.caption("Dự án được phát triển bởi group CÂCK và AI") # <--- THÊM DÒNG NÀY
+
 drug_name = st.text_input("Nhập tên thuốc:")
 lookup_button = st.button("Tra cứu")
 
@@ -60,5 +62,6 @@ if lookup_button:
             st.error("Rất tiếc, đã có lỗi xảy ra trong quá trình tra cứu. Vui lòng thử lại sau ít phút.")
             # Dòng sau giúp chúng ta xem lỗi chi tiết là gì, nhưng người dùng không cần thấy
             st.exception(e)
+
 
 
