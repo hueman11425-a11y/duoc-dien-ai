@@ -80,7 +80,7 @@ def get_drug_info(drug_name):
 
 # --- 3. GIAO DIỆN VÀ LOGIC CHÍNH ---
 
-st.title("Dược Điển AI (Error Handling++)")
+st.title("Dược Điển AI")
 st.caption("Dự án được phát triển bởi group CÂCK và AI")
 
 drug_name_input = st.text_input("Nhập tên thuốc (biệt dược hoặc hoạt chất):")
@@ -122,3 +122,4 @@ if lookup_button:
         except Exception as e:
             st.error("💥 Lỗi không xác định: Một sự cố không mong muốn đã xảy ra.")
             st.exception(e)
+
