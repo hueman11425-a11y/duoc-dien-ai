@@ -1,9 +1,7 @@
 import streamlit as st
 import google.generativeai as genai
-import time
-from google.api_core import exceptions
 
-# --- 1. CẤU HÌNH VÀ HẰNG SỐ ---
+# --- 1. CẤU HÌNH VÀ PROMPT ---
 
 # Cấu hình AI với API Key từ file secrets
 try:
@@ -37,54 +35,28 @@ Khi tôi đưa tên một loại thuốc (có thể là tên gốc hoặc biệt
 - Luôn ưu tiên thông tin được chấp thuận bởi FDA.
 """
 
-# Thời gian chờ khi gặp lỗi quá tải
-COOLDOWN_SECONDS = 61 # Tăng thêm 1 giây để đảm bảo máy chủ sẵn sàng
+# --- 2. GIAO DIỆN NGƯỜI DÙNG ---
 
-# --- 2. QUẢN LÝ TRẠNG THÁI (SESSION STATE) ---
+st.title("Dược Điển AI")
+drug_name = st.text_input("Nhập tên thuốc:")
+lookup_button = st.button("Tra cứu")
 
-if 'button_disabled' not in st.session_state:
-    st.session_state.button_disabled = False
-if 'last_error_time' not in st.session_state:
-    st.session_state.last_error_time = 0
-
-# --- 3. GIAO DIỆN NGƯỜI DÙNG ---
-
-st.title("Dược Điển AI - Phiên bản Thử nghiệm")
-drug_name = st.text_input("Nhập tên thuốc (ví dụ: Atorvastatin, Paracetamol):")
-
-# --- LOGIC KHÓA NÚT BẤM ---
-# Kiểm tra xem có đang trong thời gian chờ không
-elapsed_time = time.time() - st.session_state.last_error_time
-if elapsed_time < COOLDOWN_SECONDS:
-    st.session_state.button_disabled = True
-    remaining_time = int(COOLDOWN_SECONDS - elapsed_time)
-    st.warning(f"💡 Lượng truy cập đang tạm thời quá tải. Vui lòng thử lại sau {remaining_time} giây.")
-else:
-    st.session_state.button_disabled = False
-    st.session_state.last_error_time = 0
-
-# Nút bấm được điều khiển bởi session_state
-lookup_button = st.button("Tra cứu Thông Tin Thuốc", disabled=st.session_state.button_disabled)
-
-
-# --- 4. LOGIC XỬ LÝ CHÍNH ---
+# --- 3. LOGIC CỐT LÕI ---
 
 if lookup_button:
     if not drug_name:
         st.warning("Vui lòng nhập tên thuốc trước khi tra cứu.")
     else:
+        # Khối try-except đơn giản để bắt mọi lỗi
         try:
-            with st.spinner("Dược sĩ AI đang tổng hợp thông tin, vui lòng chờ..."):
+            with st.spinner("Dược sĩ AI đang tổng hợp thông tin..."):
                 model = genai.GenerativeModel('gemini-1.5-pro')
                 full_prompt = f"{PROMPT_GOC_RUT_GON}\n\nHãy tra cứu và trình bày thông tin cho thuốc sau đây: **{drug_name}**"
                 response = model.generate_content(full_prompt)
                 st.markdown(response.text)
 
-        except exceptions.ResourceExhausted:
-            # Ghi lại thời điểm lỗi và chạy lại giao diện để khóa nút
-            st.session_state.last_error_time = time.time()
-            st.rerun()
-
         except Exception as e:
-            st.error("Đã có lỗi không xác định xảy ra. Vui lòng kiểm tra lại.")
+            # Hiển thị một thông báo lỗi chung chung cho MỌI VẤN ĐỀ
+            st.error("Rất tiếc, đã có lỗi xảy ra trong quá trình tra cứu. Vui lòng thử lại sau ít phút.")
+            # Dòng sau giúp chúng ta xem lỗi chi tiết là gì, nhưng người dùng không cần thấy
             st.exception(e)
