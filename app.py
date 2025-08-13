@@ -27,7 +27,7 @@ Khi tôi đưa tên một loại thuốc (có thể là tên gốc hoặc biệt
 7.  **Tương tác thuốc:**
 8.  **Tác dụng phụ:**
 9.  **Lưu ý lâm sàng & Theo dõi:**
-10. **Liều dùng:**
+10. **Liều dùng:** (Trình bày liều dùng cụ thể cho các chỉ định chính và các đối tượng đặc biệt nếu có, ví dụ: người lớn, trẻ em, người suy gan, người suy thận. Trình bày dưới dạng bảng hoặc gạch đầu dòng nếu có thể để dễ so sánh.)**
 
 **QUY TẮC BẮT BUỘC:**
 - Tuyệt đối KHÔNG được bịa đặt hay suy diễn thông tin.
@@ -60,4 +60,5 @@ if lookup_button:
             st.error("Rất tiếc, đã có lỗi xảy ra trong quá trình tra cứu. Vui lòng thử lại sau ít phút.")
             # Dòng sau giúp chúng ta xem lỗi chi tiết là gì, nhưng người dùng không cần thấy
             st.exception(e)
+
 
