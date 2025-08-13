@@ -67,7 +67,7 @@ if lookup_button:
         st.warning("Vui lòng nhập tên thuốc trước khi tra cứu.")
     else:
         try:
-            model = genai.GenerativeModel('gemini-1.5-flash-latest')
+            model = genai.GenerativeModel('gemini-2.5-flash-lite')
 
             # --- BƯỚC 1: NHẬN DIỆN HOẠT CHẤT ---
             with st.spinner(f"Đang nhận diện hoạt chất trong '{drug_name_input}'..."):
@@ -90,3 +90,4 @@ if lookup_button:
         except Exception as e:
             st.error("Rất tiếc, đã có lỗi xảy ra trong quá trình tra cứu. Vui lòng thử lại sau ít phút.")
             st.exception(e) # Dòng này giúp bạn thấy lỗi chi tiết khi lập trình
+
