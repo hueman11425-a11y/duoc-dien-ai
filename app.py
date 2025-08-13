@@ -5,7 +5,7 @@ import requests
 import json
 import time
 from datetime import datetime, timedelta
-import xml.etree.ElementTree as ET # <<< THÊM THƯ VIỆN XỬ LÝ XML
+import xml.etree.ElementTree as ET
 
 # --- Cấu hình AI (nếu có) ---
 try:
@@ -22,7 +22,6 @@ except Exception as e:
     st.error(f"Lỗi khởi tạo AI model: {e}")
 
 # --- Các hàm chức năng ---
-# (Các hàm get_rxcui_from_name và get_fda_data không đổi)
 def get_rxcui_from_name(drug_name):
     base_url = "https://rxnav.nlm.nih.gov/REST/rxcui.json"
     params = {'name': drug_name, 'search': 1}
@@ -59,7 +58,8 @@ def get_fda_data(drug_name):
         st.error(f"Lỗi khi gọi API openFDA: {e}")
         return None
 
-def get_recent_studies_from_pubmed(drug_name, num_studies=3):
+# ===== THAY ĐỔI 1: Giảm số lượng nghiên cứu tìm kiếm =====
+def get_recent_studies_from_pubmed(drug_name, num_studies=2):
     base_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
     two_years_ago = (datetime.now() - timedelta(days=730)).strftime('%Y/%m/%d')
     search_term = f'("{drug_name}"[Title/Abstract]) AND ("{two_years_ago}"[Date - Publication] : "3000"[Date - Publication])'
@@ -73,7 +73,6 @@ def get_recent_studies_from_pubmed(drug_name, num_studies=3):
         st.warning(f"Không thể tìm kiếm trên PubMed: {e}")
         return []
 
-# ===== HÀM ĐƯỢC NÂNG CẤP: Xử lý XML trước khi tóm tắt =====
 def summarize_studies_with_gemini(pmids):
     if not pmids:
         return "Không tìm thấy nghiên cứu mới trên PubMed."
@@ -87,7 +86,6 @@ def summarize_studies_with_gemini(pmids):
         response = requests.get(base_url + "efetch.fcgi", params=summary_params)
         response.raise_for_status()
         
-        # --- BƯỚC DỌN DẸP DỮ LIỆU ---
         clean_text_parts = []
         root = ET.fromstring(response.content)
         for article in root.findall('.//PubmedArticle'):
@@ -104,23 +102,20 @@ def summarize_studies_with_gemini(pmids):
         if not clean_text:
             return "Không thể trích xuất nội dung từ các bài báo PubMed."
 
-        prompt = f"""
-        Dưới đây là nội dung đã được làm sạch từ một vài bài báo trên PubMed.
+        prompt = f"""Dưới đây là nội dung đã được làm sạch từ một vài bài báo trên PubMed.
         Hãy đọc và tóm tắt những phát hiện chính từ các nghiên cứu này thành một vài gạch đầu dòng bằng Tiếng Việt.
         Tập trung vào kết quả, không cần mô tả phương pháp.
-        
         Nội dung:
-        {clean_text}
-        """
+        {clean_text}"""
         
         ai_response = gemini_model.generate_content(prompt)
         return ai_response.text
     except Exception as e:
         return f"Lỗi khi tóm tắt bằng AI: {e}"
 
-# --- Giao diện chính (không đổi) ---
-st.set_page_config(page_title="Dược Điển AI - Bước 3", page_icon="💊", layout="wide")
-st.title("💊 Dược Điển AI - Bước 3: Tích hợp AI tóm tắt")
+# --- Giao diện chính ---
+st.set_page_config(page_title="Dược Điển AI", page_icon="💊", layout="wide")
+st.title("💊 Dược Điển AI - Tra Cứu Thông Tin Dược Lý")
 st.write("Phát triển bởi group CÂCK và cộng sự AI.")
 
 ten_thuoc = st.text_input("Nhập tên thuốc (tên gốc hoặc biệt dược):", placeholder="Ví dụ: Lipitor, Paracetamol...")
@@ -155,3 +150,7 @@ if st.button("Tra cứu thuốc"):
                     st.markdown(summary)
             else:
                 st.error(f"Không tìm thấy dữ liệu chi tiết cho '{standard_name}' trên openFDA.")
+            
+            # ===== THAY ĐỔI 2: Tăng thời gian nghỉ giữa các lần tra cứu tổng thể =====
+            st.info("Hệ thống sẽ tạm nghỉ 5 giây để chuẩn bị cho lần tra cứu tiếp theo.")
+            time.sleep(5)
