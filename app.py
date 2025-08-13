@@ -70,7 +70,18 @@ lookup_button = st.button("Tra cứu Thông Tin Thuốc", disabled=st.session_st
 # ==============================================================================
 # PHẦN MÃ ĐƯỢC NÂNG CẤP - GỌI AI THẬT
 # ==============================================================================
+# ==============================================================================
+# PHẦN MÃ ĐƯỢC NÂNG CẤP - TẠO ĐỒNG HỒ ĐẾM NGƯỢC THẬT
+# Thay thế toàn bộ khối 'if lookup_button...' cũ bằng khối này
+# ==============================================================================
 if lookup_button and drug_name:
+    # Vô hiệu hóa nút bấm ngay khi bấm để tránh double-click
+    st.session_state.button_disabled = True
+    st.rerun() # Chạy lại để giao diện cập nhật trạng thái nút bấm
+
+# Chúng ta cần chạy logic này mỗi lần script chạy để kiểm tra
+# xem có cần tiếp tục vô hiệu hóa nút không
+if st.session_state.get('button_disabled'):
     try:
         with st.spinner("Dược sĩ AI đang tổng hợp thông tin, vui lòng chờ... Điều này có thể mất một lúc."):
             # Thiết lập mô hình AI
@@ -85,12 +96,25 @@ if lookup_button and drug_name:
             # Hiển thị kết quả ra màn hình
             st.markdown(response.text)
 
+            # Nếu thành công, kích hoạt lại nút bấm
+            st.session_state.button_disabled = False
+
     except exceptions.ResourceExhausted as e:
-        st.session_state.button_disabled = True
-        st.session_state.error_time = time.time()
-        st.error("Rất tiếc, đã có lỗi xảy ra do quá tải. Hệ thống sẽ tự động thử lại sau ít phút.")
-        st.exception(e)
-        st.rerun()
+        # ---- BẮT ĐẦU LOGIC ĐẾM NGƯỢC MỚI ----
+        placeholder = st.empty()
+        for i in range(COOLDOWN_SECONDS, 0, -1):
+            with placeholder.container():
+                st.warning(f"💡 Lượng truy cập đang tạm thời quá tải. Vui lòng thử lại sau {i} giây.")
+            time.sleep(1) # Chờ 1 giây
+        
+        placeholder.empty() # Xóa thông báo khi đếm ngược xong
+        st.session_state.button_disabled = False # Kích hoạt lại nút bấm
+        st.rerun() # Chạy lại lần cuối để cập nhật giao diện
+
     except Exception as e:
         st.error("Đã có lỗi không xác định xảy ra. Vui lòng kiểm tra lại API Key và kết nối mạng.")
         st.exception(e)
+        st.session_state.button_disabled = False # Kích hoạt lại nút nếu có lỗi khác
+
+# Điều chỉnh lại logic hiển thị nút bấm một chút cho phù hợp
+st.button("Tra cứu Thông Tin Thuốc", key="real_button", disabled=st.session_state.get('button_disabled', False))
