@@ -90,7 +90,7 @@ def get_drug_info(drug_name):
 
 
 # --- 3. GIAO DIỆN VÀ LOGIC CHÍNH ---
-st.title("Dược Điển AI (Verification++)")
+st.title("Dược Điển AI")
 # (Phần còn lại không thay đổi)
 st.caption("Dự án được phát triển bởi group CÂCK và AI")
 
@@ -125,3 +125,4 @@ if lookup_button:
         except Exception as e:
             st.error("💥 Lỗi không xác định: Một sự cố không mong muốn đã xảy ra.")
             st.exception(e)
+
