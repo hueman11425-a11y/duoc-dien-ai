@@ -7,7 +7,7 @@ import time
 try:
     api_key = st.secrets["GOOGLE_API_KEY"]
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-pro')
+    model = genai.GenerativeModel('gemini-2.5-pro')
     is_api_configured = True
 except (KeyError, AttributeError):
     is_api_configured = False
@@ -95,3 +95,4 @@ else:
             st.divider()
             st.success("Hoàn tất tra cứu!")
             st.markdown("*Lưu ý: Thông tin trên chỉ mang tính chất tham khảo và không thể thay thế cho chẩn đoán, tư vấn và chỉ định của chuyên gia y tế. Luôn tham khảo ý kiến bác sĩ hoặc dược sĩ trước khi sử dụng bất kỳ loại thuốc nào.*")
+
