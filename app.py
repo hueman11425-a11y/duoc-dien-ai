@@ -3,19 +3,13 @@ import streamlit as st
 import google.generativeai as genai
 
 # --- Cấu hình và khởi tạo mô hình AI ---
-# LƯU Ý QUAN TRỌNG:
-# Chúng ta sẽ không dán API Key vào đây.
-# Thay vào đó, chúng ta sẽ sử dụng tính năng "Secrets" của Streamlit để bảo mật.
-# Tôi sẽ hướng dẫn bạn cách làm ở bước triển khai.
 try:
-    # Lấy API key từ Streamlit Secrets
     api_key = st.secrets["GOOGLE_API_KEY"]
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-2.5-pro')
-    # Cờ để kiểm tra xem API key có hợp lệ không
+    # ===== THAY ĐỔI 1: Nâng cấp model lên gemini-1.5-pro =====
+    model = genai.GenerativeModel('gemini-1.5-pro')
     is_api_configured = True
 except (KeyError, AttributeError):
-    # Nếu không tìm thấy key trong secrets, đánh dấu là chưa cấu hình
     is_api_configured = False
 except Exception as e:
     is_api_configured = False
@@ -78,13 +72,12 @@ Khi tôi đưa tên một loại thuốc, bạn **PHẢI** trình bày kết qu�
 st.set_page_config(page_title="Dược Điển AI", page_icon="💊", layout="wide")
 
 st.title("💊 Dược Điển AI - Tra Cứu Dược Lý Thông Minh")
-st.write("Cung cấp thông tin thuốc nhanh chóng, đáng tin cậy cho chuyên gia y tế. Phát triển bởi Group CACK và cộng sự AI.")
+# ===== THAY ĐỔI 2: Cập nhật tên nhóm phát triển =====
+st.write("Cung cấp thông tin thuốc nhanh chóng, đáng tin cậy cho chuyên gia y tế. Phát triển bởi group CÂCK và cộng sự AI.")
 
-# Kiểm tra xem API đã được cấu hình đúng cách chưa
 if not is_api_configured:
     st.error("LỖI CẤU HÌNH: Google API Key chưa được thiết lập trong Streamlit Secrets. Vui lòng liên hệ quản trị viên.")
 else:
-    # Nếu API ok, hiển thị giao diện tra cứu
     ten_thuoc = st.text_input("Nhập tên thuốc (tên gốc hoặc biệt dược):", placeholder="Ví dụ: Atorvastatin hoặc Lipitor")
 
     if st.button("Tra cứu Thông tin Thuốc"):
@@ -93,19 +86,29 @@ else:
         else:
             with st.spinner(f"Đang tổng hợp thông tin cho **{ten_thuoc}**... Quá trình này có thể mất vài chục giây."):
                 try:
-                    # Tạo yêu cầu hoàn chỉnh gửi đến AI
+                    # Thiết lập cài đặt an toàn để cho phép các nội dung y khoa
+                    safety_settings = {
+                        "HARM_CATEGORY_HARASSMENT": "BLOCK_NONE",
+                        "HARM_CATEGORY_HATE_SPEECH": "BLOCK_NONE",
+                        "HARM_CATEGORY_SEXUALLY_EXPLICIT": "BLOCK_NONE",
+                        "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE",
+                    }
+                    
                     full_prompt = PROMPT_GOC + "\n\n" + f"Hãy tra cứu thông tin về thuốc sau: **{ten_thuoc}**"
                     
-                    # Gọi API của Gemini
-                    response = model.generate_content(full_prompt)
+                    # Gọi API của Gemini với cài đặt an toàn
+                    response = model.generate_content(
+                        full_prompt,
+                        safety_settings=safety_settings
+                    )
                     
-                    # Hiển thị kết quả
                     st.divider()
                     st.subheader(f"Báo cáo chi tiết về {ten_thuoc}")
                     st.markdown(response.text)
                     st.divider()
 
+                except ValueError:
+                     # Xử lý lỗi do bộ lọc an toàn khi không có response.text
+                     st.error("Lỗi: Phản hồi từ AI đã bị chặn bởi bộ lọc an toàn. Điều này có thể xảy ra với các loại thuốc có thông tin nhạy cảm. Chúng tôi đang làm việc để cải thiện vấn đề này.")
                 except Exception as e:
-
                     st.error(f"Đã có lỗi xảy ra trong quá trình gọi AI: {e}")
-
