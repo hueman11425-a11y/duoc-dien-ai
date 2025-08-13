@@ -12,7 +12,7 @@ except (FileNotFoundError, KeyError):
     st.error("LỖI: Vui lòng tạo file .streamlit/secrets.toml và thêm `GOOGLE_API_KEY = 'KEY_CUA_BAN'` vào đó.")
     st.stop()
 
-# Prompt gốc - Phiên bản rút gọn để giảm tải
+# Prompt gốc - Phiên bản rút gọn
 PROMPT_GOC_RUT_GON = """
 Bạn là một Dược sĩ lâm sàng AI chuyên nghiệp và là chuyên gia trong việc tổng hợp thông tin y khoa.
 Nhiệm vụ của bạn là tra cứu và phân tích thông tin về một loại thuốc mà tôi cung cấp.
@@ -38,51 +38,53 @@ Khi tôi đưa tên một loại thuốc (có thể là tên gốc hoặc biệt
 """
 
 # Thời gian chờ khi gặp lỗi quá tải
-COOLDOWN_SECONDS = 60
+COOLDOWN_SECONDS = 61 # Tăng thêm 1 giây để đảm bảo máy chủ sẵn sàng
 
+# --- 2. QUẢN LÝ TRẠNG THÁI (SESSION STATE) ---
 
-# --- 2. GIAO DIỆN NGƯỜI DÙNG ---
+if 'button_disabled' not in st.session_state:
+    st.session_state.button_disabled = False
+if 'last_error_time' not in st.session_state:
+    st.session_state.last_error_time = 0
+
+# --- 3. GIAO DIỆN NGƯỜI DÙNG ---
 
 st.title("Dược Điển AI - Phiên bản Thử nghiệm")
 drug_name = st.text_input("Nhập tên thuốc (ví dụ: Atorvastatin, Paracetamol):")
 
-# Chỉ có MỘT nút bấm duy nhất trong toàn bộ ứng dụng
-lookup_button = st.button("Tra cứu Thông Tin Thuốc")
+# --- LOGIC KHÓA NÚT BẤM ---
+# Kiểm tra xem có đang trong thời gian chờ không
+elapsed_time = time.time() - st.session_state.last_error_time
+if elapsed_time < COOLDOWN_SECONDS:
+    st.session_state.button_disabled = True
+    remaining_time = int(COOLDOWN_SECONDS - elapsed_time)
+    st.warning(f"💡 Lượng truy cập đang tạm thời quá tải. Vui lòng thử lại sau {remaining_time} giây.")
+else:
+    st.session_state.button_disabled = False
+    st.session_state.last_error_time = 0
+
+# Nút bấm được điều khiển bởi session_state
+lookup_button = st.button("Tra cứu Thông Tin Thuốc", disabled=st.session_state.button_disabled)
 
 
-# --- 3. LOGIC XỬ LÝ CHÍNH ---
+# --- 4. LOGIC XỬ LÝ CHÍNH ---
 
-# Toàn bộ logic sẽ chỉ chạy khi người dùng bấm nút
 if lookup_button:
-    # Kiểm tra xem người dùng đã nhập tên thuốc chưa
     if not drug_name:
         st.warning("Vui lòng nhập tên thuốc trước khi tra cứu.")
     else:
-        # Bắt đầu xử lý chính khi đã có tên thuốc
         try:
             with st.spinner("Dược sĩ AI đang tổng hợp thông tin, vui lòng chờ..."):
-                # Thiết lập mô hình AI
-                model = genai.GenerativeModel('gemini-2.5-pro')
-
-                # Tạo câu lệnh hoàn chỉnh để gửi cho AI (sử dụng prompt rút gọn)
+                model = genai.GenerativeModel('gemini-1.5-pro')
                 full_prompt = f"{PROMPT_GOC_RUT_GON}\n\nHãy tra cứu và trình bày thông tin cho thuốc sau đây: **{drug_name}**"
-
-                # Gửi yêu cầu đến AI và nhận kết quả
                 response = model.generate_content(full_prompt)
-
-                # Hiển thị kết quả ra màn hình
                 st.markdown(response.text)
 
         except exceptions.ResourceExhausted:
-            # Xử lý lỗi quá tải với đồng hồ đếm ngược
-            placeholder = st.empty()
-            for i in range(COOLDOWN_SECONDS, 0, -1):
-                placeholder.warning(f"💡 Lượng truy cập đang tạm thời quá tải. Vui lòng thử lại sau {i} giây.")
-                time.sleep(1) # Chờ 1 giây
-            placeholder.empty() # Xóa thông báo khi đếm ngược xong
+            # Ghi lại thời điểm lỗi và chạy lại giao diện để khóa nút
+            st.session_state.last_error_time = time.time()
+            st.rerun()
 
         except Exception as e:
-            # Xử lý các lỗi không xác định khác
             st.error("Đã có lỗi không xác định xảy ra. Vui lòng kiểm tra lại.")
-            st.exception(e) # In ra lỗi chi tiết để chúng ta gỡ rối
-
+            st.exception(e)
