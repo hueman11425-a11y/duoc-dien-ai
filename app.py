@@ -70,7 +70,15 @@ Khi tôi đưa tên một loại thuốc (luôn là tên gốc/hoạt chất), b
 # --- 3. CÁC HÀM XỬ LÝ (Cache) ---
 @st.cache_resource
 def get_model():
-    return genai.GenerativeModel('gemini-2.5-flash-lite')
+    generation_config = {
+      "max_output_tokens": 8192,
+      "temperature": 0.6,
+    }
+    model = genai.GenerativeModel(
+        model_name='gemini-2.5-flash-lite',
+        generation_config=generation_config
+    )
+    return model
 
 @st.cache_data
 def get_drug_info(drug_name):
@@ -161,3 +169,4 @@ if lookup_button:
         st.warning("Vui lòng nhập tên thuốc trước khi tra cứu.")
     else:
         run_lookup(drug_name_input)
+
