@@ -40,17 +40,25 @@ PROMPT_GOC_RUT_GON = """
 Bạn là một Dược sĩ lâm sàng AI chuyên nghiệp và là chuyên gia trong việc tổng hợp thông tin y khoa.
 Nhiệm vụ của bạn là tra cứu và phân tích thông tin về một loại thuốc mà tôi cung cấp.
 Hãy sử dụng toàn bộ kiến thức đã được huấn luyện của bạn từ các nguồn dữ liệu y khoa uy tín trên thế giới như sách giáo khoa (Goodman & Gilman's, Katzung's), các cơ sở dữ liệu mở (openFDA, WHO), và các tạp chí khoa học hàng đầu (PubMed, The Lancet, NEJM).
+
+---
+**LƯU Ý ĐẶC BIỆT KHI PHÂN TÍCH:**
+- Nếu tên thuốc đầu vào chỉ có MỘT hoạt chất, hãy phân tích bình thường.
+- Nếu tên thuốc đầu vào chứa NHIỀU hoạt chất (ví dụ: 'Losartan, Amlodipine'), hãy phân tích chúng như một **liệu pháp phối hợp**. Trong mỗi mục, hãy làm rõ vai trò của từng thành phần và cách chúng tác động qua lại nếu có. Đừng hỏi lại, hãy tiến hành phân tích ngay.
+---
+
 Khi tôi đưa tên một loại thuốc (luôn là tên gốc/hoạt chất), bạn PHẢI trình bày kết quả theo đúng cấu trúc 10 mục sau đây, sử dụng ngôn ngữ chuyên môn, chính xác và rõ ràng:
-1.  **Tên thuốc:** (Tên gốc và các tên biệt dược phổ biến)
-2.  **Nhóm thuốc:**
-3.  **Cơ chế:**
-4.  **Dược động học (ADME):** (Trình bày đủ từng mục A/D/M/E)
-5.  **Chỉ định:**
+
+1.  **Tên thuốc:** (Tên gốc và các tên biệt dược phổ biến của sự phối hợp này)
+2.  **Nhóm thuốc:** (Nêu nhóm của từng hoạt chất)
+3.  **Cơ chế:** (Mô tả cơ chế của từng hoạt chất và lợi ích của việc phối hợp chúng)
+4.  **Dược động học (ADME):** (Nêu các thông số chính cho cả hai hoạt chất nếu có khác biệt đáng kể)
+5.  **Chỉ định:** (Các chỉ định được phê duyệt cho liệu pháp phối hợp này)
 6.  **Chống chỉ định:**
 7.  **Tương tác thuốc:**
-8.  **Tác dụng phụ:**
+8.  **Tác dụng phụ:** (Nêu các tác dụng phụ chung và riêng của từng thành phần)
 9.  **Lưu ý lâm sàng & Theo dõi:**
-10. **Liều dùng:** (Trình bày liều dùng cụ thể cho các chỉ định chính và các đối tượng đặc biệt nếu có, ví dụ: người lớn, trẻ em, người suy gan, người suy thận. Trình bày dưới dạng bảng hoặc gạch đầu dòng nếu có thể để dễ so sánh.)**
+10. **Liều dùng:** (Trình bày liều dùng cụ thể cho các chỉ định chính của thuốc phối hợp)
 
 **QUY TẮC BẮT BUỘC:**
 - Tuyệt đối KHÔNG được bịa đặt hay suy diễn thông tin.
@@ -61,37 +69,26 @@ Khi tôi đưa tên một loại thuốc (luôn là tên gốc/hoạt chất), b
 # --- 3. CÁC HÀM XỬ LÝ (Cache) ---
 @st.cache_resource
 def get_model():
-    # Trả lại hàm về trạng thái đơn giản nhất
     return genai.GenerativeModel('gemini-2.5-flash-lite')
 
-@st.cache_data
+@st.cache_data(ttl="6h") # Thêm ttl để dữ liệu tự làm mới sau 6 tiếng
 def get_drug_info(drug_name):
     model = get_model()
-
-    # Bước 1: Nhận diện thông minh
     prompt_nhan_dien_final = PROMPT_NHAN_DIEN.format(drug_name=drug_name)
     response_nhan_dien = model.generate_content(prompt_nhan_dien_final)
     hoat_chat_goc = response_nhan_dien.text.strip()
-
     if hoat_chat_goc == "INVALID":
         return f"❌ Lỗi: '{drug_name}' không được nhận dạng là một tên thuốc hợp lệ."
 
-    # Bước 2: Phân tích chi tiết
-    # --- THAY ĐỔI QUAN TRỌNG NẰM Ở ĐÂY ---
-    # Tạo cấu hình thế hệ ngay trước khi gọi API phân tích
     generation_config = {
-        "max_output_tokens": 8192, # Đặt ngân sách token ở mức tối đa
+        "max_output_tokens": 8192,
         "temperature": 0.6,
     }
-    
     full_prompt = f"{PROMPT_GOC_RUT_GON}\n\nHãy tra cứu và trình bày thông tin cho thuốc sau đây: **{hoat_chat_goc}**"
-    
-    # Áp dụng trực tiếp generation_config vào lệnh gọi API này
     response_phan_tich = model.generate_content(
         full_prompt,
         generation_config=generation_config
     )
-    
     final_response = f"✅ Hoạt chất đã nhận diện: **{hoat_chat_goc}**\n\n---\n\n{response_phan_tich.text}"
     return final_response
     
@@ -109,30 +106,25 @@ def run_lookup(drug_name):
         else:
             st.error(final_result)
     except ga_ex.PermissionDenied as e:
-        st.error("🚫 Lỗi Xác Thực: Google API Key của bạn không hợp lệ hoặc đã bị vô hiệu hóa. Vui lòng kiểm tra lại trong file `.streamlit/secrets.toml`.")
-        st.exception(e)
+        st.error("🚫 Lỗi Xác Thực: Google API Key của bạn không hợp lệ hoặc đã bị vô hiệu hóa.")
     except ga_ex.ResourceExhausted as e:
-        st.error("🚦 Đã đạt giới hạn: Bạn đã gửi quá nhiều yêu cầu trong một thời gian ngắn. Vui lòng chờ vài phút rồi thử lại.")
-        st.exception(e)
+        st.error("🚦 Đã đạt giới hạn: Bạn đã gửi quá nhiều yêu cầu trong một thời gian ngắn.")
     except ValueError as e:
         if "safety setting" in str(e):
-            st.error("🔒 Nội dung bị chặn: Yêu cầu của bạn có thể đã vi phạm chính sách an toàn của Google. Vui lòng thử lại với một tên thuốc khác.")
-            st.exception(e)
+            st.error("🔒 Nội dung bị chặn: Yêu cầu của bạn có thể đã vi phạm chính sách an toàn.")
         else:
-            st.error(f"Lỗi Dữ Liệu: Có vấn đề với dữ liệu đầu vào hoặc đầu ra. Chi tiết: {e}")
-            st.exception(e)
+            st.error(f"Lỗi Dữ Liệu: Có vấn đề với dữ liệu đầu vào hoặc đầu ra.")
     except ga_ex.GoogleAPICallError as e:
-        st.error("🌐 Lỗi Kết Nối: Không thể kết nối đến máy chủ của Google AI. Vui lòng kiểm tra lại kết nối mạng của bạn.")
-        st.exception(e)
+        st.error("🌐 Lỗi Kết Nối: Máy chủ Google AI đang gặp sự cố tạm thời. Vui lòng thử lại sau ít phút.")
     except Exception as e:
         st.error("💥 Lỗi không xác định: Một sự cố không mong muốn đã xảy ra.")
         st.exception(e)
 
 # --- 5. GIAO DIỆN VÀ LOGIC CHÍNH ---
-st.title("Dược Điển AI Closed Beta 💊")
+st.set_page_config(page_title="Dược Điển AI", page_icon="💊")
+st.title("Dược Điển AI 💊")
 st.caption("Dự án được phát triển bởi group CÂCK và AI")
 
-# --- HIỂN THỊ LỊCH SỬ TRÊN SIDEBAR ---
 st.sidebar.header("Lịch sử tra cứu")
 if not st.session_state.history:
     st.sidebar.info("Chưa có thuốc nào được tra cứu.")
@@ -141,7 +133,6 @@ else:
         if st.sidebar.button(drug, key=f"history_{drug}", use_container_width=True):
             run_lookup(drug)
 
-# --- KHUNG GÓP Ý TRÊN SIDEBAR ---
 st.sidebar.markdown("---") 
 with st.sidebar.container(border=True):
     st.write("**Bạn có ý tưởng để cải thiện ứng dụng?**")
@@ -151,7 +142,6 @@ with st.sidebar.container(border=True):
         help="Mở form góp ý trong một tab mới"
     )
 
-# --- KHU VỰC NHẬP LIỆU CHÍNH ---
 drug_name_input = st.text_input("Nhập tên thuốc (biệt dược hoặc hoạt chất):", key="main_input")
 lookup_button = st.button("Tra cứu")
 
