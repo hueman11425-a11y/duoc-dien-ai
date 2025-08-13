@@ -12,13 +12,13 @@ except (FileNotFoundError, KeyError):
     st.error("LỖI: Vui lòng tạo file .streamlit/secrets.toml và thêm `GOOGLE_API_KEY = 'KEY_CUA_BAN'` vào đó.")
     st.stop()
 
-# Prompt gốc - "Bộ não" của Dược Điển AI
-PROMPT_GOC = """
+# Prompt gốc - Phiên bản rút gọn để giảm tải
+PROMPT_GOC_RUT_GON = """
 Bạn là một Dược sĩ lâm sàng AI chuyên nghiệp và là chuyên gia trong việc tổng hợp thông tin y khoa.
-Nhiệm vụ của bạn là tra cứu và phân tích thông tin về một loại thuốc mà tôi cungbish.
+Nhiệm vụ của bạn là tra cứu và phân tích thông tin về một loại thuốc mà tôi cung cấp.
 Hãy sử dụng toàn bộ kiến thức đã được huấn luyện của bạn từ các nguồn dữ liệu y khoa uy tín trên thế giới như sách giáo khoa (Goodman & Gilman's, Katzung's), các cơ sở dữ liệu mở (openFDA, WHO), và các tạp chí khoa học hàng đầu (PubMed, The Lancet, NEJM).
 
-Khi tôi đưa tên một loại thuốc (có thể là tên gốc hoặc biệt dược), bạn PHẢI trình bày kết quả theo đúng cấu trúc 11 mục sau đây, sử dụng ngôn ngữ chuyên môn, chính xác và rõ ràng:
+Khi tôi đưa tên một loại thuốc (có thể là tên gốc hoặc biệt dược), bạn PHẢI trình bày kết quả theo đúng cấu trúc 10 mục sau đây, sử dụng ngôn ngữ chuyên môn, chính xác và rõ ràng:
 
 1.  **Tên thuốc:** (Tên gốc và các tên biệt dược phổ biến)
 2.  **Nhóm thuốc:**
@@ -30,7 +30,6 @@ Khi tôi đưa tên một loại thuốc (có thể là tên gốc hoặc biệt
 8.  **Tác dụng phụ:**
 9.  **Lưu ý lâm sàng & Theo dõi:**
 10. **Liều dùng:**
-11. **Nghiên cứu mới nhất:** (Tóm tắt 5-6 nghiên cứu nổi bật từ PubMed hoặc các tạp chí uy tín (Lancet, NEJM, Nature Reviews Drug Discovery, Pharmacological Reviews, Frontiers in Pharmacology, Drug Resistance Updates, Pharmacological Research) liên quan đến thuốc trong 1-2 năm gần nhất. Trình bày logic khoa học dễ hiểu)
 
 **QUY TẮC BẮT BUỘC:**
 - Tuyệt đối KHÔNG được bịa đặt hay suy diễn thông tin.
@@ -65,8 +64,8 @@ if lookup_button:
                 # Thiết lập mô hình AI
                 model = genai.GenerativeModel('gemini-1.5-pro')
 
-                # Tạo câu lệnh hoàn chỉnh để gửi cho AI
-                full_prompt = f"{PROMPT_GOC}\n\nHãy tra cứu và trình bày thông tin cho thuốc sau đây: **{drug_name}**"
+                # Tạo câu lệnh hoàn chỉnh để gửi cho AI (sử dụng prompt rút gọn)
+                full_prompt = f"{PROMPT_GOC_RUT_GON}\n\nHãy tra cứu và trình bày thông tin cho thuốc sau đây: **{drug_name}**"
 
                 # Gửi yêu cầu đến AI và nhận kết quả
                 response = model.generate_content(full_prompt)
