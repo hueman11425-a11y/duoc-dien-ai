@@ -7,7 +7,7 @@ try:
     api_key = st.secrets["GOOGLE_API_KEY"]
     genai.configure(api_key=api_key)
     # ===== THAY ĐỔI 1: Nâng cấp model lên gemini-1.5-pro =====
-    model = genai.GenerativeModel('gemini-1.5-pro')
+    model = genai.GenerativeModel('gemini-2.5-pro')
     is_api_configured = True
 except (KeyError, AttributeError):
     is_api_configured = False
@@ -112,3 +112,4 @@ else:
                      st.error("Lỗi: Phản hồi từ AI đã bị chặn bởi bộ lọc an toàn. Điều này có thể xảy ra với các loại thuốc có thông tin nhạy cảm. Chúng tôi đang làm việc để cải thiện vấn đề này.")
                 except Exception as e:
                     st.error(f"Đã có lỗi xảy ra trong quá trình gọi AI: {e}")
+
