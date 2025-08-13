@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 try:
     api_key = st.secrets["GOOGLE_API_KEY"]
     genai.configure(api_key=api_key)
-    gemini_model = genai.GenerativeModel('gemini-pro')
+    gemini_model = genai.GenerativeModel('gemini-2.5-pro')
     is_api_configured = True
 except (KeyError, AttributeError):
     is_api_configured = False
@@ -143,3 +143,4 @@ if st.button("Tra cứu thuốc"):
                     st.markdown(summary)
             else:
                 st.error(f"Không tìm thấy dữ liệu chi tiết cho '{standard_name}' trên openFDA.")
+
