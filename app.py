@@ -1,12 +1,13 @@
 # --- Thư viện cần thiết ---
 import streamlit as st
 import google.generativeai as genai
+import time # <<< THÊM THƯ VIỆN TIME
 
 # --- Cấu hình và khởi tạo mô hình AI ---
 try:
     api_key = st.secrets["GOOGLE_API_KEY"]
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-1.5-pro')
+    model = genai.GenerativeModel('gemini-2.5-pro')
     is_api_configured = True
 except (KeyError, AttributeError):
     is_api_configured = False
@@ -14,14 +15,12 @@ except Exception as e:
     is_api_configured = False
 
 # --- Cấu hình chung cho việc gọi AI ---
-# Cài đặt an toàn để cho phép các nội dung y khoa
 safety_settings = {
     "HARM_CATEGORY_HARASSMENT": "BLOCK_NONE",
     "HARM_CATEGORY_HATE_SPEECH": "BLOCK_NONE",
     "HARM_CATEGORY_SEXUALLY_EXPLICIT": "BLOCK_NONE",
     "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE",
 }
-# Cấu hình để tăng giới hạn token cho câu trả lời
 generation_config = {
     "max_output_tokens": 8192,
 }
@@ -85,10 +84,12 @@ else:
             # Lặp qua từng mục và gọi AI
             for section_name, section_prompt in sections.items():
                 with st.spinner(f"Đang lấy thông tin mục: {section_name}..."):
-                    # Hiển thị kết quả trong một expander
                     with st.expander(f"**{section_name}**", expanded=False):
                         result = get_drug_info_section(ten_thuoc, section_name, section_prompt)
                         st.markdown(result)
+                
+                # ===== THAY ĐỔI QUAN TRỌNG: Thêm độ trễ 3 giây =====
+                time.sleep(3)
             
             st.divider()
             st.success("Hoàn tất tra cứu!")
