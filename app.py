@@ -39,21 +39,19 @@ except (FileNotFoundError, KeyError):
     st.stop()
 
 PROMPT_NHAN_DIEN = load_prompt("prompt_nhandien.txt")
-PROMPT_GOC_RUT_GON = load_prompt("prompt_goc_rutgon.txt")
+PROMPT_REGULAR = load_prompt("prompt_regular.txt")
+PROMPT_PRO = load_prompt("prompt_pro.txt")
 
 # --- 3. CÁC HÀM XỬ LÝ ---
 
 # --- HÀM XỬ LÝ MÃ TRUY CẬP (PHIÊN BẢN GSPREAD) ---
 @st.cache_data(ttl=600)
 def get_access_codes_df():
-    """Kết nối tới Google Sheets bằng gspread và lấy dữ liệu."""
     try:
         credentials = st.secrets.connections.gsheets.credentials
         gspread_client = gspread.service_account_from_dict(credentials)
-        
         spreadsheet_name = st.secrets.connections.gsheets.spreadsheet
         spreadsheet = gspread_client.open(spreadsheet_name)
-        
         worksheet = spreadsheet.sheet1
         codes_df = get_as_dataframe(worksheet)
         return codes_df
@@ -62,60 +60,56 @@ def get_access_codes_df():
         return pd.DataFrame()
     except Exception as e:
         st.error(f"Lỗi kết nối tới Google Sheets. Vui lòng thử lại sau.")
-        # Ghi lại lỗi chi tiết hơn ở phía server để admin xem (tùy chọn nâng cao)
         print(f"GSpread Error: {e}")
         return pd.DataFrame()
 
 def verify_code(user_code):
-    """Kiểm tra mã người dùng nhập với dữ liệu trên Google Sheet."""
     if not user_code:
         return False, "Vui lòng nhập mã truy cập."
-    
     codes_df = get_access_codes_df()
     if codes_df.empty:
         return False, "Không thể tải dữ liệu mã truy cập. Vui lòng thử lại."
-
     codes_df.dropna(subset=['code'], inplace=True)
     codes_df['code'] = codes_df['code'].astype(str)
-    
     matched_code_series = codes_df[codes_df['code'] == user_code]
-
     if matched_code_series.empty:
         return False, "Mã không hợp lệ hoặc không tìm thấy."
-
     code_info = matched_code_series.iloc[0]
     code_type = code_info['type']
-    
     if code_type == 'permanent':
         st.session_state.pro_access = True
         return True, f"Xác thực thành công! Chào mừng {code_info.get('owner', 'Pro User')}."
-
     if code_type == 'temporary':
         try:
             created_date = pd.to_datetime(code_info['created_at']).date()
             today = datetime.date.today()
             days_passed = (today - created_date).days
-            
             if 0 <= days_passed <= 7:
                 st.session_state.pro_access = True
                 return True, f"Xác thực thành công! Mã của bạn còn hiệu lực {7 - days_passed} ngày."
             else:
                 return False, "Mã tạm thời của bạn đã hết hạn."
         except Exception:
-            return False, "Lỗi định dạng ngày tháng trong file Google Sheet. Vui lòng kiểm tra lại cột 'created_at'."
-    
+            return False, "Lỗi định dạng ngày tháng trong file Google Sheet."
     return False, "Loại mã không xác định."
 
 # --- HÀM XỬ LÝ DƯỢC ĐIỂN ---
 @st.cache_resource
-def get_model():
-    return genai.GenerativeModel('gemini-2.5-flash-lite')
+def get_regular_model():
+    model_name = st.secrets.get("models", {}).get("regular", "gemini-2.5-flash-lite")
+    return genai.GenerativeModel(model_name)
+
+@st.cache_resource
+def get_pro_model():
+    model_name = st.secrets.get("models", {}).get("pro", "gemini-pro")
+    return genai.GenerativeModel(model_name)
 
 @st.cache_data(ttl="6h")
 def get_drug_info(drug_name, is_pro_user=False):
-    model = get_model()
+    # Bước 1: Luôn dùng model regular để nhận diện hoạt chất cho nhanh và rẻ
+    identifier_model = get_regular_model()
     prompt_nhan_dien_final = PROMPT_NHAN_DIEN.format(drug_name=drug_name)
-    response_nhan_dien = model.generate_content(prompt_nhan_dien_final)
+    response_nhan_dien = identifier_model.generate_content(prompt_nhan_dien_final)
     
     response_text = response_nhan_dien.text
     try:
@@ -126,17 +120,19 @@ def get_drug_info(drug_name, is_pro_user=False):
     if hoat_chat_goc == "INVALID" or not hoat_chat_goc:
         return f"❌ Lỗi: '{drug_name}' không được nhận dạng là một tên thuốc hợp lệ."
 
-    generation_config = {
-        "max_output_tokens": 8192,
-        "temperature": 0.6,
-    }
-    full_prompt = f"{PROMPT_GOC_RUT_GON}\n\nHãy tra cứu và trình bày thông tin cho thuốc sau đây: **{hoat_chat_goc}**"
-    response_phan_tich = model.generate_content(full_prompt, generation_config=generation_config)
-    final_response = f"✅ Hoạt chất đã nhận diện: **{hoat_chat_goc}**\n\n---\n\n{response_phan_tich.text}"
-    
+    # Bước 2: Chọn model và prompt phù hợp để phân tích chuyên sâu
     if is_pro_user:
-        final_response += "\n\n---\n\n**11. Nghiên cứu lâm sàng gần đây:** (Tính năng Pro. Sắp ra mắt...)"
-        
+        analysis_model = get_pro_model()
+        analysis_prompt = PROMPT_PRO
+    else:
+        analysis_model = get_regular_model()
+        analysis_prompt = PROMPT_REGULAR
+
+    generation_config = {"max_output_tokens": 8192, "temperature": 0.6}
+    full_prompt = f"{analysis_prompt}\n\nHãy tra cứu và trình bày thông tin cho thuốc sau đây: **{hoat_chat_goc}**"
+    
+    response_phan_tich = analysis_model.generate_content(full_prompt, generation_config=generation_config)
+    final_response = f"✅ Hoạt chất đã nhận diện: **{hoat_chat_goc}**\n\n---\n\n{response_phan_tich.text}"
     return final_response
 
 # --- 4. HÀM LOGIC TRUNG TÂM ---
@@ -164,7 +160,6 @@ st.caption("Dự án được phát triển bởi group CÂCK và AI")
 
 # --- Sidebar ---
 st.sidebar.header("Lịch sử tra cứu")
-# ... (Phần này giữ nguyên)
 if not st.session_state.history:
     st.sidebar.info("Chưa có thuốc nào được tra cứu.")
 else:
