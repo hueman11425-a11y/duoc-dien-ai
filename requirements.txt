@@ -1,7 +1,6 @@
 streamlit
 google-generativeai
-requests
 gspread
 gspread-dataframe
 pandas
-googlesearch-python
+biopython
