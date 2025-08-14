@@ -10,10 +10,8 @@ from gspread_dataframe import get_as_dataframe
 from gspread.exceptions import SpreadsheetNotFound
 from Bio import Entrez
 import time
-from streamlit_copy_button import copy_button
 
 # --- KIỂM TRA TRẠNG THÁI BẢO TRÌ ---
-# ... (Giữ nguyên)
 is_maintenance = st.secrets.get("maintenance_mode", False) 
 if is_maintenance:
     st.set_page_config(page_title="Bảo trì", page_icon="🛠️")
@@ -23,12 +21,10 @@ if is_maintenance:
     st.stop()
 
 # --- 1. KHỞI TẠO TRẠNG THÁI PHIÊN ---
-# ... (Giữ nguyên)
 if 'history' not in st.session_state: st.session_state.history = []
 if 'pro_access' not in st.session_state: st.session_state.pro_access = False
 
 # --- 2. CẤU HÌNH VÀ TẢI PROMPTS ---
-# ... (Giữ nguyên)
 def load_prompt(file_path):
     try:
         with open(file_path, "r", encoding="utf-8") as f: return f.read()
@@ -46,7 +42,6 @@ PROMPT_PRO = load_prompt("prompt_pro.txt")
 PROMPT_SUMMARY = load_prompt("prompt_summary.txt")
 
 # --- 3. CÁC HÀM XỬ LÝ ---
-# ... (Toàn bộ các hàm xử lý giữ nguyên, không thay đổi)
 @st.cache_data(ttl=600)
 def get_access_codes_df():
     try:
@@ -170,10 +165,8 @@ def run_lookup(drug_name):
         if not final_result.startswith("❌ Lỗi:"):
             st.markdown(final_result)
             
-            # QUAY LẠI SỬ DỤNG COPY_BUTTON
-            st.markdown("---") 
-            copy_button(final_result, "Sao chép toàn bộ nội dung")
-
+            # ĐÃ XÓA TÍNH NĂNG SAO CHÉP
+            
             # Xử lý lịch sử
             if drug_name not in st.session_state.history:
                 st.session_state.history.insert(0, drug_name)
@@ -186,7 +179,6 @@ def run_lookup(drug_name):
         st.exception(e)
 
 # --- 5. GIAO DIỆN VÀ LOGIC CHÍNH ---
-# ... (Giữ nguyên)
 st.set_page_config(page_title="Dược Điển AI", page_icon="💊")
 st.title("Dược Điển AI 💊")
 st.caption("Dự án được phát triển bởi group CÂCK và AI")
