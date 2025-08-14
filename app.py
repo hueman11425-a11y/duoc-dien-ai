@@ -3,8 +3,9 @@ import google.generativeai as genai
 import google.generativeai.types as genai_types
 import google.api_core.exceptions as ga_ex
 import datetime
-from streamlit_gsheets import GSheetsConnection
 import pandas as pd
+import gspread
+from gspread_dataframe import get_as_dataframe
 
 # --- KIỂM TRA TRẠNG THÁI BẢO TRÌ ---
 is_maintenance = st.secrets.get("maintenance_mode", False) 
@@ -41,13 +42,23 @@ PROMPT_GOC_RUT_GON = load_prompt("prompt_goc_rutgon.txt")
 
 # --- 3. CÁC HÀM XỬ LÝ ---
 
-# --- HÀM XỬ LÝ MÃ TRUY CẬP ---
-@st.cache_data(ttl=600) # Cache lại dữ liệu trong 10 phút để tránh đọc lại liên tục
+# --- HÀM XỬ LÝ MÃ TRUY CẬP (PHIÊN BẢN GSPREAD) ---
+@st.cache_data(ttl=600)
 def get_access_codes_df():
-    """Kết nối và đọc toàn bộ dữ liệu từ Google Sheet."""
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    codes_df = conn.read(worksheet="Sheet1") # Mặc định đọc trang tính đầu tiên
-    return codes_df
+    """Kết nối tới Google Sheets bằng gspread và lấy dữ liệu."""
+    try:
+        credentials = st.secrets.connections.gsheets.credentials
+        gspread_client = gspread.service_account_from_dict(credentials)
+        
+        spreadsheet_name = st.secrets.connections.gsheets.spreadsheet
+        spreadsheet = gspread_client.open(spreadsheet_name)
+        
+        worksheet = spreadsheet.sheet1
+        codes_df = get_as_dataframe(worksheet)
+        return codes_df
+    except Exception as e:
+        st.error(f"Lỗi kết nối tới Google Sheets: {e}")
+        return pd.DataFrame()
 
 def verify_code(user_code):
     """Kiểm tra mã người dùng nhập với dữ liệu trên Google Sheet."""
@@ -55,9 +66,10 @@ def verify_code(user_code):
         return False, "Vui lòng nhập mã truy cập."
     
     codes_df = get_access_codes_df()
-    # Loại bỏ các dòng trống trong Google Sheet nếu có
+    if codes_df.empty:
+        return False, "Không thể tải dữ liệu mã truy cập. Vui lòng thử lại."
+
     codes_df.dropna(subset=['code'], inplace=True)
-    # Đảm bảo cột 'code' là kiểu chuỗi để so sánh chính xác
     codes_df['code'] = codes_df['code'].astype(str)
     
     matched_code_series = codes_df[codes_df['code'] == user_code]
@@ -116,7 +128,6 @@ def get_drug_info(drug_name, is_pro_user=False):
     response_phan_tich = model.generate_content(full_prompt, generation_config=generation_config)
     final_response = f"✅ Hoạt chất đã nhận diện: **{hoat_chat_goc}**\n\n---\n\n{response_phan_tich.text}"
     
-    # Thêm mục 11 cho người dùng Pro
     if is_pro_user:
         final_response += "\n\n---\n\n**11. Nghiên cứu lâm sàng gần đây:** (Tính năng Pro. Sắp ra mắt...)"
         
@@ -147,27 +158,17 @@ st.caption("Dự án được phát triển bởi group CÂCK và AI")
 
 # --- Sidebar ---
 st.sidebar.header("Lịch sử tra cứu")
-if not st.session_state.history:
-    st.sidebar.info("Chưa có thuốc nào được tra cứu.")
-else:
-    for drug in st.session_state.history:
-        if st.sidebar.button(drug, key=f"history_{drug}", use_container_width=True):
-           run_lookup(drug)
+# ... (Phần này giữ nguyên)
+for drug in st.session_state.history:
+    if st.sidebar.button(drug, key=f"history_{drug}", use_container_width=True):
+        run_lookup(drug)
 
 st.sidebar.markdown("---")
-
-# --- Form phản hồi ---
 with st.sidebar.container(border=True):
     st.write("**Bạn có ý tưởng để cải thiện ứng dụng?**")
-    st.link_button(
-        "Gửi phản hồi ngay!",
-        url="https://forms.gle/M44GDS4hJ7LpY7b98",
-        help="Mở form góp ý trong một tab mới"
-    )
-
+    st.link_button( "Gửi phản hồi ngay!", url="https://forms.gle/M44GDS4hJ7LpY7b98", help="Mở form góp ý trong một tab mới" )
 st.sidebar.markdown("---")
 
-# --- Giao diện xác thực Pro ---
 st.sidebar.header("Truy cập Pro")
 if st.session_state.get("pro_access"):
     st.sidebar.success("Bạn đã có quyền truy cập Pro.")
@@ -177,7 +178,7 @@ else:
         is_valid, message = verify_code(pro_code_input)
         if is_valid:
             st.sidebar.success(message)
-            st.rerun() # Tải lại trang để cập nhật trạng thái
+            st.rerun() 
         else:
             st.sidebar.error(message)
 
