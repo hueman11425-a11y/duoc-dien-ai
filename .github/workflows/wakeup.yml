@@ -1,0 +1,13 @@
+name: Wake Up Streamlit App
+
+on:
+  schedule:
+    # Chạy sau mỗi 15 phút
+    - cron: '*/15 * * * *'
+
+jobs:
+  wake-up:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send request to app
+        run: curl -s https://duoc-dien-ai-laz8nqrjyz4arbpqum6nxv.streamlit.app/ > /dev/null
