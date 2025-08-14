@@ -6,7 +6,7 @@ Hãy sử dụng toàn bộ kiến thức đã được huấn luyện của b�
 - Nếu tên thuốc đầu vào chứa NHIỀU hoạt chất, hãy phân tích chúng như một **liệu pháp phối hợp**.
 ---
 
-Khi tôi đưa tên một loại thuốc (luôn là tên gốc/hoạt chất), bạn PHẢI trình bày kết quả theo đúng cấu trúc nâng cao sau đây, sử dụng ngôn ngữ chuyên môn, chính xác và rõ ràng:
+Khi tôi đưa tên một loại thuốc (luôn là tên gốc/hoạt chất), bạn PHẢI trình bày kết quả theo đúng cấu trúc 10 mục sau đây, sử dụng ngôn ngữ chuyên môn, chính xác và rõ ràng:
 
 1.  **Tên thuốc:**
 2.  **Nhóm thuốc:**
@@ -18,9 +18,7 @@ Khi tôi đưa tên một loại thuốc (luôn là tên gốc/hoạt chất), b
 8.  **Tác dụng phụ:**
 9.  **Lưu ý lâm sàng & Theo dõi:**
 10. **Liều dùng:**
-11. **Nghiên cứu lâm sàng gần đây:** [SUMMARY_PLACEHOLDER]
 
 **QUY TẮC BẮT BUỘC:**
 - Tuyệt đối KHÔNG được bịa đặt hay suy diễn thông tin.
-
 - Nếu không tìm thấy dữ liệu cho mục nào, hãy ghi rõ: "Không có đủ dữ liệu đáng tin cậy."
