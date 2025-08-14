@@ -6,7 +6,7 @@ import datetime
 import pandas as pd
 import gspread
 from gspread_dataframe import get_as_dataframe
-from gspread.exceptions import SpreadsheetNotFound, WorksheetNotFound
+from gspread.exceptions import SpreadsheetNotFound
 
 # --- KIỂM TRA TRẠNG THÁI BẢO TRÌ ---
 is_maintenance = st.secrets.get("maintenance_mode", False) 
@@ -41,10 +41,11 @@ except (FileNotFoundError, KeyError):
 PROMPT_NHAN_DIEN = load_prompt("prompt_nhandien.txt")
 PROMPT_REGULAR = load_prompt("prompt_regular.txt")
 PROMPT_PRO = load_prompt("prompt_pro.txt")
+PROMPT_SUMMARY = load_prompt("prompt_summary.txt")
 
 # --- 3. CÁC HÀM XỬ LÝ ---
 
-# --- HÀM XỬ LÝ MÃ TRUY CẬP (PHIÊN BẢN GSPREAD) ---
+# --- HÀM XỬ LÝ MÃ TRUY CẬP ---
 @st.cache_data(ttl=600)
 def get_access_codes_df():
     try:
@@ -64,16 +65,14 @@ def get_access_codes_df():
         return pd.DataFrame()
 
 def verify_code(user_code):
-    if not user_code:
-        return False, "Vui lòng nhập mã truy cập."
+    # ... (Hàm này giữ nguyên, không thay đổi) ...
+    if not user_code: return False, "Vui lòng nhập mã truy cập."
     codes_df = get_access_codes_df()
-    if codes_df.empty:
-        return False, "Không thể tải dữ liệu mã truy cập. Vui lòng thử lại."
+    if codes_df.empty: return False, "Không thể tải dữ liệu mã truy cập. Vui lòng thử lại."
     codes_df.dropna(subset=['code'], inplace=True)
     codes_df['code'] = codes_df['code'].astype(str)
     matched_code_series = codes_df[codes_df['code'] == user_code]
-    if matched_code_series.empty:
-        return False, "Mã không hợp lệ hoặc không tìm thấy."
+    if matched_code_series.empty: return False, "Mã không hợp lệ hoặc không tìm thấy."
     code_info = matched_code_series.iloc[0]
     code_type = code_info['type']
     if code_type == 'permanent':
@@ -87,13 +86,11 @@ def verify_code(user_code):
             if 0 <= days_passed <= 7:
                 st.session_state.pro_access = True
                 return True, f"Xác thực thành công! Mã của bạn còn hiệu lực {7 - days_passed} ngày."
-            else:
-                return False, "Mã tạm thời của bạn đã hết hạn."
-        except Exception:
-            return False, "Lỗi định dạng ngày tháng trong file Google Sheet."
+            else: return False, "Mã tạm thời của bạn đã hết hạn."
+        except Exception: return False, "Lỗi định dạng ngày tháng trong file Google Sheet."
     return False, "Loại mã không xác định."
 
-# --- HÀM XỬ LÝ DƯỢC ĐIỂN ---
+# --- HÀM XỬ LÝ DƯỢC ĐIỂN (NÂNG CẤP TÍNH NĂNG PRO) ---
 @st.cache_resource
 def get_regular_model():
     model_name = st.secrets.get("models", {}).get("regular", "gemini-2.5-flash-lite")
@@ -104,9 +101,30 @@ def get_pro_model():
     model_name = st.secrets.get("models", {}).get("pro", "gemini-pro")
     return genai.GenerativeModel(model_name)
 
+def get_live_searches(drug_name):
+    """Thực hiện tìm kiếm Google và trả về context."""
+    from googlesearch import search
+    query = f'"{drug_name}" recent clinical trial systematic review site:pubmed.ncbi.nlm.nih.gov OR site:nejm.org OR site:thelancet.com OR site:cochranelibrary.com'
+    
+    # st.info(f"DEBUG: Đang tìm kiếm với query: {query}")
+    search_results = search(query, num_results=5, lang="en")
+    
+    context = ""
+    for result in search_results:
+        # Giả lập lấy snippet, vì thư viện này không cung cấp sẵn
+        context += f"- Nguồn: {result}\n\n" 
+    
+    # Do thư viện googlesearch không lấy được snippet, chúng ta sẽ tạm thời trả về
+    # một chuỗi context chứa các link để AI xử lý sau.
+    # Trong phiên bản nâng cao hơn, ta có thể dùng các thư viện khác để crawl snippet.
+    if not context:
+        return "Không tìm thấy kết quả tìm kiếm nào."
+        
+    return context
+
+
 @st.cache_data(ttl="6h")
 def get_drug_info(drug_name, is_pro_user=False):
-    # Bước 1: Luôn dùng model regular để nhận diện hoạt chất cho nhanh và rẻ
     identifier_model = get_regular_model()
     prompt_nhan_dien_final = PROMPT_NHAN_DIEN.format(drug_name=drug_name)
     response_nhan_dien = identifier_model.generate_content(prompt_nhan_dien_final)
@@ -120,7 +138,6 @@ def get_drug_info(drug_name, is_pro_user=False):
     if hoat_chat_goc == "INVALID" or not hoat_chat_goc:
         return f"❌ Lỗi: '{drug_name}' không được nhận dạng là một tên thuốc hợp lệ."
 
-    # Bước 2: Chọn model và prompt phù hợp để phân tích chuyên sâu
     if is_pro_user:
         analysis_model = get_pro_model()
         analysis_prompt = PROMPT_PRO
@@ -132,10 +149,33 @@ def get_drug_info(drug_name, is_pro_user=False):
     full_prompt = f"{analysis_prompt}\n\nHãy tra cứu và trình bày thông tin cho thuốc sau đây: **{hoat_chat_goc}**"
     
     response_phan_tich = analysis_model.generate_content(full_prompt, generation_config=generation_config)
-    final_response = f"✅ Hoạt chất đã nhận diện: **{hoat_chat_goc}**\n\n---\n\n{response_phan_tich.text}"
+    base_response_text = response_phan_tich.text
+    
+    # Bắt đầu quy trình riêng cho người dùng Pro
+    if is_pro_user:
+        try:
+            with st.spinner("Người dùng Pro: Đang tìm kiếm các nghiên cứu mới nhất..."):
+                # 1. Tìm kiếm Google
+                search_context = get_live_searches(hoat_chat_goc)
+                
+                # 2. Yêu cầu AI tóm tắt
+                summary_prompt_final = PROMPT_SUMMARY.format(drug_name=hoat_chat_goc, search_results=search_context)
+                summary_model = get_pro_model() # Dùng model Pro để tóm tắt
+                summary_response = summary_model.generate_content(summary_prompt_final, generation_config=generation_config)
+                section_11_content = summary_response.text
+
+                # 3. Thay thế placeholder
+                base_response_text = base_response_text.replace("[SUMMARY_PLACEHOLDER]", section_11_content)
+
+        except Exception as e:
+            st.warning(f"Lỗi khi tìm kiếm thông tin Pro: {e}")
+            base_response_text = base_response_text.replace("[SUMMARY_PLACEHOLDER]", "Đã xảy ra lỗi khi cố gắng tìm kiếm các nghiên cứu gần đây.")
+
+    final_response = f"✅ Hoạt chất đã nhận diện: **{hoat_chat_goc}**\n\n---\n\n{base_response_text}"
     return final_response
 
 # --- 4. HÀM LOGIC TRUNG TÂM ---
+# ... (Hàm run_lookup giữ nguyên, không thay đổi) ...
 def run_lookup(drug_name):
     try:
         with st.spinner(f"Đang tra cứu '{drug_name}'..."):
@@ -154,11 +194,10 @@ def run_lookup(drug_name):
         st.exception(e)
 
 # --- 5. GIAO DIỆN VÀ LOGIC CHÍNH ---
+# ... (Toàn bộ phần giao diện giữ nguyên, không thay đổi) ...
 st.set_page_config(page_title="Dược Điển AI", page_icon="💊")
 st.title("Dược Điển AI 💊")
 st.caption("Dự án được phát triển bởi group CÂCK và AI")
-
-# --- Sidebar ---
 st.sidebar.header("Lịch sử tra cứu")
 if not st.session_state.history:
     st.sidebar.info("Chưa có thuốc nào được tra cứu.")
@@ -166,13 +205,11 @@ else:
     for drug in st.session_state.history:
         if st.sidebar.button(drug, key=f"history_{drug}", use_container_width=True):
             run_lookup(drug)
-
 st.sidebar.markdown("---")
 with st.sidebar.container(border=True):
     st.write("**Bạn có ý tưởng để cải thiện ứng dụng?**")
     st.link_button( "Gửi phản hồi ngay!", url="https://forms.gle/M44GDS4hJ7LpY7b98", help="Mở form góp ý trong một tab mới" )
 st.sidebar.markdown("---")
-
 st.sidebar.header("Truy cập Pro")
 if st.session_state.get("pro_access"):
     st.sidebar.success("Bạn đã có quyền truy cập Pro.")
@@ -185,11 +222,8 @@ else:
             st.rerun() 
         else:
             st.sidebar.error(message)
-
-# --- Main page ---
 drug_name_input = st.text_input("Nhập tên thuốc (biệt dược hoặc hoạt chất):", key="main_input")
 lookup_button = st.button("Tra cứu")
-
 if lookup_button:
     if not drug_name_input:
         st.warning("Vui lòng nhập tên thuốc trước khi tra cứu.")
