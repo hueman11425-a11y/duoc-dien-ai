@@ -158,10 +158,12 @@ st.caption("Dự án được phát triển bởi group CÂCK và AI")
 
 # --- Sidebar ---
 st.sidebar.header("Lịch sử tra cứu")
-# ... (Phần này giữ nguyên)
-for drug in st.session_state.history:
-    if st.sidebar.button(drug, key=f"history_{drug}", use_container_width=True):
-        run_lookup(drug)
+if not st.session_state.history:
+    st.sidebar.info("Chưa có thuốc nào được tra cứu.")
+else:
+    for drug in st.session_state.history:
+        if st.sidebar.button(drug, key=f"history_{drug}", use_container_width=True):
+            run_lookup(drug)
 
 st.sidebar.markdown("---")
 with st.sidebar.container(border=True):
