@@ -2,6 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 import google.generativeai.types as genai_types
 import google.api_core.exceptions as ga_ex
+import re
 
 # --- 1. KHỞI TẠO TRẠNG THÁI PHIÊN (SESSION STATE) ---
 if 'history' not in st.session_state:
@@ -19,7 +20,6 @@ PROMPT_NHAN_DIEN = """Nhiệm vụ của bạn là nhận diện (các) hoạt c
 - Nếu Input đã là một hoạt chất gốc, hãy trả về chính nó.
 - Nếu Input KHÔNG PHẢI là tên thuốc (ví dụ: một từ thông thường, một câu vô nghĩa), bạn BẮT BUỘC phải trả về duy nhất từ "INVALID".
 - Chỉ trả về tên hoạt chất hoặc từ "INVALID". Tuyệt đối không giải thích.
-
 Ví dụ:
 Input: Lipitor
 Output: Atorvastatin
@@ -40,11 +40,12 @@ PROMPT_GOC_RUT_GON = """
 Bạn là một Dược sĩ lâm sàng AI chuyên nghiệp và là chuyên gia trong việc tổng hợp thông tin y khoa.
 Nhiệm vụ của bạn là tra cứu và phân tích thông tin về một loại thuốc mà tôi cung cấp.
 Hãy sử dụng toàn bộ kiến thức đã được huấn luyện của bạn từ các nguồn dữ liệu y khoa uy tín trên thế giới như sách giáo khoa (Goodman & Gilman's, Katzung's), các cơ sở dữ liệu mở (openFDA, WHO), và các tạp chí khoa học hàng đầu (PubMed, The Lancet, NEJM).
-
 ---
 **LƯU Ý ĐẶC BIỆT KHI PHÂN TÍCH:**
 - Nếu tên thuốc đầu vào chỉ có MỘT hoạt chất, hãy phân tích bình thường.
-- Nếu tên thuốc đầu vào chứa NHIỀU hoạt chất (ví dụ: 'Losartan, Amlodipine'), hãy phân tích chúng như một **liệu pháp phối hợp**. Trong mỗi mục, hãy làm rõ vai trò của từng thành phần và cách chúng tác động qua lại nếu có. Đừng hỏi lại, hãy tiến hành phân tích ngay.
+- Nếu tên thuốc đầu vào chứa NHIỀU hoạt chất (ví dụ: 'Losartan, Amlodipine'), hãy phân tích chúng như một **liệu pháp phối hợp**.
+Trong mỗi mục, hãy làm rõ vai trò của từng thành phần và cách chúng tác động qua lại nếu có.
+Đừng hỏi lại, hãy tiến hành phân tích ngay.
 ---
 
 Khi tôi đưa tên một loại thuốc (luôn là tên gốc/hoạt chất), bạn PHẢI trình bày kết quả theo đúng cấu trúc 10 mục sau đây, sử dụng ngôn ngữ chuyên môn, chính xác và rõ ràng:
@@ -67,11 +68,39 @@ Khi tôi đưa tên một loại thuốc (luôn là tên gốc/hoạt chất), b
 """
 
 # --- 3. CÁC HÀM XỬ LÝ (Cache) ---
+
+def preprocess_drug_name(drug_name):
+    """
+    Hàm này làm sạch tên thuốc đầu vào để giúp AI nhận diện hoạt chất dễ dàng hơn.
+    Nó loại bỏ:
+    - Các hàm lượng (vd: 500mg, 10g)
+    - Các dạng bào chế phổ biến (vd: tablet, capsule, sr, xr)
+    - Các ký tự đặc biệt không cần thiết và khoảng trắng thừa.
+    """
+    if not isinstance(drug_name, str):
+        return ""
+        
+    processed_name = drug_name.lower()
+    
+    words_to_remove = [
+        'tablet', 'tablets', 'cap', 'capsule', 'capsules', 'caplet', 'caplets',
+        'sr', 'xr', 'er', 'hcl', 'plus', 'fort', 'forte'
+    ]
+    for word in words_to_remove:
+        processed_name = processed_name.replace(word, '')
+        
+    processed_name = re.sub(r'\d+\s*(mg|g|mcg|iu)?', '', processed_name)
+    
+    processed_name = re.sub(r'[^\w\s,]', '', processed_name)
+    processed_name = ' '.join(processed_name.split())
+    
+    return processed_name
+
 @st.cache_resource
 def get_model():
     return genai.GenerativeModel('gemini-2.5-flash-lite')
 
-@st.cache_data(ttl="6h") # Thêm ttl để dữ liệu tự làm mới sau 6 tiếng
+@st.cache_data(ttl="6h")
 def get_drug_info(drug_name):
     model = get_model()
     prompt_nhan_dien_final = PROMPT_NHAN_DIEN.format(drug_name=drug_name)
@@ -94,17 +123,28 @@ def get_drug_info(drug_name):
     
 # --- 4. HÀM LOGIC TRUNG TÂM ---
 def run_lookup(drug_name):
+    """
+    Hàm logic trung tâm: làm sạch tên thuốc, tra cứu và hiển thị kết quả.
+    """
     try:
+        cleaned_drug_name = preprocess_drug_name(drug_name)
+
         with st.spinner(f"Đang tra cứu '{drug_name}'..."):
-            final_result = get_drug_info(drug_name)
+            final_result = get_drug_info(cleaned_drug_name)
+
         if not final_result.startswith("❌ Lỗi:"):
             st.markdown(final_result)
             if drug_name not in st.session_state.history:
                 st.session_state.history.insert(0, drug_name)
                 if len(st.session_state.history) > 10:
-                    st.session_state.history.pop()
+                     st.session_state.history.pop()
         else:
-            st.error(final_result)
+            error_message = f"❌ Lỗi: '{drug_name}' không được nhận dạng là một tên thuốc hợp lệ."
+            if "không được nhận dạng" in final_result:
+                 st.error(error_message)
+            else:
+                 st.error(final_result)
+
     except ga_ex.PermissionDenied as e:
         st.error("🚫 Lỗi Xác Thực: Google API Key của bạn không hợp lệ hoặc đã bị vô hiệu hóa.")
     except ga_ex.ResourceExhausted as e:
@@ -131,7 +171,7 @@ if not st.session_state.history:
 else:
     for drug in st.session_state.history:
         if st.sidebar.button(drug, key=f"history_{drug}", use_container_width=True):
-            run_lookup(drug)
+           run_lookup(drug)
 
 st.sidebar.markdown("---") 
 with st.sidebar.container(border=True):
