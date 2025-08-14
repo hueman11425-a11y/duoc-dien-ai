@@ -93,11 +93,11 @@ def get_pro_model():
     model_name = st.secrets.get("models", {}).get("pro", "gemini-pro")
     return genai.GenerativeModel(model_name)
 
-# HÀM TÌM KIẾM PUBMED MỚI
+# HÀM TÌM KIẾM PUBMED (NÂNG CẤP LẤY PMID)
 @st.cache_data(ttl=3600)
 def search_pubmed(drug_name):
     """Thực hiện tìm kiếm trên PubMed bằng API và trả về context."""
-    Entrez.email = "duocdien.ai.project@example.com"  # Bắt buộc phải có email
+    Entrez.email = "duocdien.ai.project@example.com"
     api_key = st.secrets.get("api_keys", {}).get("pubmed")
     if api_key:
         Entrez.api_key = api_key
@@ -105,7 +105,6 @@ def search_pubmed(drug_name):
     search_term = f'"{drug_name}"[Title/Abstract] AND ("clinical trial"[Publication Type] OR "systematic review"[Publication Type])'
     
     try:
-        # Bước 1: Tìm kiếm ID các bài báo
         handle = Entrez.esearch(db="pubmed", term=search_term, retmax="5", sort="relevance")
         record = Entrez.read(handle)
         handle.close()
@@ -114,12 +113,10 @@ def search_pubmed(drug_name):
         if not id_list:
             return "Không tìm thấy bài báo phù hợp nào gần đây trên PubMed."
 
-        # Bước 2: Lấy chi tiết của các bài báo đó
         handle = Entrez.efetch(db="pubmed", id=id_list, rettype="medline", retmode="text")
         records_text = handle.read()
         handle.close()
 
-        # Bước 3: Phân tích và tạo context
         context = ""
         articles = records_text.strip().split("\n\n")
         for article_text in articles:
@@ -127,9 +124,10 @@ def search_pubmed(drug_name):
             abstract = next((line[6:] for line in article_text.split('\n') if line.startswith("AB  - ")), "N/A")
             journal = next((line[6:] for line in article_text.split('\n') if line.startswith("JT  - ")), "N/A")
             pub_date = next((line[6:] for line in article_text.split('\n') if line.startswith("DP  - ")), "N/A")
+            pmid = next((line[6:] for line in article_text.split('\n') if line.startswith("PMID- ")), "N/A")
 
-            context += f"- Tiêu đề: {title}\n- Tạp chí: {journal}\n- Năm: {pub_date[:4]}\n- Tóm tắt: {abstract}\n\n"
-            time.sleep(0.1)  # Tạm dừng một chút để không gửi request quá nhanh
+            context += f"- Tiêu đề: {title}\n- Tạp chí: {journal}\n- Năm: {pub_date[:4]}\n- Tóm tắt: {abstract}\n- PMID: {pmid.strip()}\n\n"
+            time.sleep(0.1)
 
         return context
     except Exception as e:
@@ -137,7 +135,7 @@ def search_pubmed(drug_name):
 
 @st.cache_data(ttl="6h")
 def get_drug_info(drug_name, is_pro_user=False):
-    # ... (Phần nhận diện hoạt chất gốc giữ nguyên) ...
+    # ... (Phần còn lại của hàm này giữ nguyên, không thay đổi) ...
     identifier_model = get_regular_model()
     prompt_nhan_dien_final = PROMPT_NHAN_DIEN.format(drug_name=drug_name)
     response_nhan_dien = identifier_model.generate_content(prompt_nhan_dien_final)
