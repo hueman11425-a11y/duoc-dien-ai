@@ -18,8 +18,9 @@ Khi tôi đưa tên một loại thuốc (luôn là tên gốc/hoạt chất), b
 8.  **Tác dụng phụ:**
 9.  **Lưu ý lâm sàng & Theo dõi:**
 10. **Liều dùng:**
-11. **Nghiên cứu lâm sàng gần đây (Placeholder):** (Tính năng Pro. Dữ liệu từ PubMed và các tạp chí khoa học sẽ được tích hợp ở Giai đoạn 3).
+11. **Nghiên cứu lâm sàng gần đây:** [SUMMARY_PLACEHOLDER]
 
 **QUY TẮC BẮT BUỘC:**
 - Tuyệt đối KHÔNG được bịa đặt hay suy diễn thông tin.
+
 - Nếu không tìm thấy dữ liệu cho mục nào, hãy ghi rõ: "Không có đủ dữ liệu đáng tin cậy."
