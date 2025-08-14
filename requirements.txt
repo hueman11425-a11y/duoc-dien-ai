@@ -1,7 +1,8 @@
-streamlit
-google-generativeai
-gspread
-gspread-dataframe
-pandas
-biopython
-streamlit-copy-button
+streamlit==1.37.0
+google-generativeai==0.7.1
+gspread==6.0.2
+gspread-dataframe==3.3.1
+pandas==2.2.2
+biopython==1.84
+streamlit-copy-button==0.3.2
+requests
