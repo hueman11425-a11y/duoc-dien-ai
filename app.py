@@ -6,6 +6,7 @@ import datetime
 import pandas as pd
 import gspread
 from gspread_dataframe import get_as_dataframe
+from gspread.exceptions import SpreadsheetNotFound, WorksheetNotFound
 
 # --- KIỂM TRA TRẠNG THÁI BẢO TRÌ ---
 is_maintenance = st.secrets.get("maintenance_mode", False) 
@@ -42,23 +43,38 @@ PROMPT_GOC_RUT_GON = load_prompt("prompt_goc_rutgon.txt")
 
 # --- 3. CÁC HÀM XỬ LÝ ---
 
-# --- HÀM XỬ LÝ MÃ TRUY CẬP (PHIÊN BẢN GSPREAD) ---
+# --- HÀM XỬ LÝ MÃ TRUY CẬP (PHIÊN BẢN GSPREAD DEBUG) ---
 @st.cache_data(ttl=600)
 def get_access_codes_df():
-    """Kết nối tới Google Sheets bằng gspread và lấy dữ liệu."""
+    """Kết nối tới Google Sheets bằng gspread và lấy dữ liệu với các bước debug."""
     try:
+        st.info("DEBUG: Bắt đầu kết nối tới Google Sheets...")
         credentials = st.secrets.connections.gsheets.credentials
         gspread_client = gspread.service_account_from_dict(credentials)
+        st.info("DEBUG: Xác thực với Google thành công.")
         
         spreadsheet_name = st.secrets.connections.gsheets.spreadsheet
+        st.info(f"DEBUG: Đang thử mở spreadsheet có tên: '{spreadsheet_name}'...")
         spreadsheet = gspread_client.open(spreadsheet_name)
+        st.info("DEBUG: Mở spreadsheet thành công. Đang đọc worksheet...")
         
         worksheet = spreadsheet.sheet1
+        st.info(f"DEBUG: Đang đọc từ worksheet có tên: '{worksheet.title}'...")
         codes_df = get_as_dataframe(worksheet)
+        st.info("DEBUG: Đọc dữ liệu thành công!")
         return codes_df
-    except Exception as e:
-        st.error(f"Lỗi kết nối tới Google Sheets: {e}")
+
+    except SpreadsheetNotFound:
+        st.error(f"LỖI DEBUG: Không tìm thấy Spreadsheet có tên '{st.secrets.connections.gsheets.spreadsheet}'. Vui lòng kiểm tra lại tên trong secrets và đảm bảo bạn đã chia sẻ file cho email: {st.secrets.connections.gsheets.credentials.client_email}")
         return pd.DataFrame()
+    except WorksheetNotFound:
+        st.error("LỖI DEBUG: Không tìm thấy worksheet có tên 'Sheet1'. Có thể bạn đã đổi tên trang tính đầu tiên. Vui lòng đổi tên nó lại thành 'Sheet1'.")
+        return pd.DataFrame()
+    except Exception as e:
+        st.error("LỖI DEBUG không xác định. Thông tin lỗi chi tiết:")
+        st.exception(e) # In ra toàn bộ lỗi để chúng ta xem
+        return pd.DataFrame()
+
 
 def verify_code(user_code):
     """Kiểm tra mã người dùng nhập với dữ liệu trên Google Sheet."""
@@ -67,7 +83,7 @@ def verify_code(user_code):
     
     codes_df = get_access_codes_df()
     if codes_df.empty:
-        return False, "Không thể tải dữ liệu mã truy cập. Vui lòng thử lại."
+        return False, "Không thể tải dữ liệu mã truy cập. Vui lòng kiểm tra các thông báo lỗi DEBUG ở trên."
 
     codes_df.dropna(subset=['code'], inplace=True)
     codes_df['code'] = codes_df['code'].astype(str)
@@ -101,6 +117,7 @@ def verify_code(user_code):
     return False, "Loại mã không xác định."
 
 # --- HÀM XỬ LÝ DƯỢC ĐIỂN ---
+# ... (Các hàm còn lại không thay đổi) ...
 @st.cache_resource
 def get_model():
     return genai.GenerativeModel('gemini-2.5-flash-lite')
@@ -158,12 +175,10 @@ st.caption("Dự án được phát triển bởi group CÂCK và AI")
 
 # --- Sidebar ---
 st.sidebar.header("Lịch sử tra cứu")
-if not st.session_state.history:
-    st.sidebar.info("Chưa có thuốc nào được tra cứu.")
-else:
-    for drug in st.session_state.history:
-        if st.sidebar.button(drug, key=f"history_{drug}", use_container_width=True):
-            run_lookup(drug)
+# ... (Phần này giữ nguyên)
+for drug in st.session_state.history:
+    if st.sidebar.button(drug, key=f"history_{drug}", use_container_width=True):
+        run_lookup(drug)
 
 st.sidebar.markdown("---")
 with st.sidebar.container(border=True):
