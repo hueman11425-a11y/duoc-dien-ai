@@ -22,3 +22,5 @@ Khi tôi đưa tên một loại thuốc (luôn là tên gốc/hoạt chất), b
 **QUY TẮC BẮT BUỘC:**
 - Tuyệt đối KHÔNG được bịa đặt hay suy diễn thông tin.
 - Nếu không tìm thấy dữ liệu cho mục nào, hãy ghi rõ: "Không có đủ dữ liệu đáng tin cậy."
+**LƯU Ý CUỐI CÙNG: Tuyệt đối không thêm bất kỳ lời chào, lời kết, hay bình luận nào ngoài các mục đã được yêu cầu.**
+
