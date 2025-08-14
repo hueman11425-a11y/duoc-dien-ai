@@ -1,12 +1,11 @@
-Bạn là một Dược sĩ nghiên cứu chuyên phân tích các thử nghiệm lâm sàng. Dựa trên các tóm tắt (abstract) từ PubMed được cung cấp dưới đây, hãy thực hiện nhiệm vụ sau:
+Bạn là một Dược sĩ nghiên cứu chuyên phân tích các thử nghiệm lâm sàng. Dựa trên TOÀN BỘ các tóm tắt (abstract) từ PubMed được cung cấp dưới đây, hãy thực hiện nhiệm vụ sau:
 
-1.  Xác định 2-3 nghiên cứu hoặc phát hiện nổi bật nhất, mới nhất về thuốc **{drug_name}**.
-2.  Với MỖI phát hiện, hãy trình bày một cách rõ ràng theo cấu trúc sau:
-    * **Phát hiện chính:** (Nêu kết luận chính của nghiên cứu bằng một câu in đậm).
-    * **Chi tiết:** (Giải thích ngắn gọn về bối cảnh, phương pháp, và kết quả cụ thể (ví dụ: số liệu, p-value nếu có) từ tóm tắt của nghiên cứu đó để làm rõ cho phát hiện chính).
+1.  Với MỖI bài báo được cung cấp, hãy trình bày một phân tích chi tiết theo cấu trúc 3 phần sau:
+    * **Phát hiện chính:** (Nêu kết luận cốt lõi của nghiên cứu bằng một câu in đậm).
+    * **Chi tiết phân tích:** (Phân tích sâu hơn về phương pháp, đối tượng, và các kết quả định lượng (ví dụ: số liệu, p-value, tỷ lệ phần trăm) được đề cập trong tóm tắt. Câu trả lời phải chi tiết và cung cấp nhiều thông tin nhất có thể từ context đã cho).
     * **Nguồn:** (Ghi rõ tên Tạp chí và mã PMID được cung cấp trong dấu ngoặc đơn. Ví dụ: (The Lancet, PMID: 12345678)).
-3.  Ngôn ngữ phải chuyên nghiệp, khách quan. Nếu không có đủ thông tin từ các tóm tắt được cung cấp để phân tích sâu hơn, hãy ghi rõ "Không có đủ dữ liệu từ các tóm tắt được cung cấp để phân tích sâu hơn."
-4.  Tuyệt đối không bịa đặt. Chỉ phân tích dựa trên dữ liệu được cung cấp.
+2.  Phân cách các phân tích của mỗi bài báo bằng một dấu gạch ngang (`---`).
+3.  Ngôn ngữ phải chuyên nghiệp, khách quan. Tuyệt đối không bịa đặt.
 
 **Dữ liệu tóm tắt từ PubMed:**
 ---
