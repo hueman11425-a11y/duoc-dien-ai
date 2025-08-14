@@ -3,6 +3,7 @@ import google.generativeai as genai
 import google.generativeai.types as genai_types
 import google.api_core.exceptions as ga_ex
 import datetime
+from datetime import date, timedelta
 import pandas as pd
 import gspread
 from gspread_dataframe import get_as_dataframe
@@ -74,7 +75,7 @@ def verify_code(user_code):
     if code_type == 'temporary':
         try:
             created_date = pd.to_datetime(code_info['created_at']).date()
-            today = datetime.date.today()
+            today = date.today()
             days_passed = (today - created_date).days
             if 0 <= days_passed <= 7:
                 st.session_state.pro_access = True
@@ -93,16 +94,21 @@ def get_pro_model():
     model_name = st.secrets.get("models", {}).get("pro", "gemini-pro")
     return genai.GenerativeModel(model_name)
 
-# HÀM TÌM KIẾM PUBMED (NÂNG CẤP LẤY PMID)
+# HÀM TÌM KIẾM PUBMED (NÂNG CẤP BỘ LỌC THỜI GIAN)
 @st.cache_data(ttl=3600)
 def search_pubmed(drug_name):
-    """Thực hiện tìm kiếm trên PubMed bằng API và trả về context."""
+    """Thực hiện tìm kiếm trên PubMed trong vòng 2 năm gần nhất."""
     Entrez.email = "duocdien.ai.project@example.com"
     api_key = st.secrets.get("api_keys", {}).get("pubmed")
     if api_key:
         Entrez.api_key = api_key
 
-    search_term = f'"{drug_name}"[Title/Abstract] AND ("clinical trial"[Publication Type] OR "systematic review"[Publication Type])'
+    # Tự động tạo bộ lọc ngày cho 2 năm gần nhất
+    today = date.today()
+    two_years_ago = today - timedelta(days=730)
+    date_filter = f'AND ("{two_years_ago.strftime("%Y/%m/%d")}"[Date - Publication] : "{today.strftime("%Y/%m/%d")}"[Date - Publication])'
+    
+    search_term = f'"{drug_name}"[Title/Abstract] AND ("clinical trial"[Publication Type] OR "systematic review"[Publication Type]) {date_filter}'
     
     try:
         handle = Entrez.esearch(db="pubmed", term=search_term, retmax="5", sort="relevance")
@@ -111,7 +117,7 @@ def search_pubmed(drug_name):
         id_list = record["IdList"]
 
         if not id_list:
-            return "Không tìm thấy bài báo phù hợp nào gần đây trên PubMed."
+            return "Không tìm thấy bài báo phù hợp nào trong 2 năm gần đây trên PubMed."
 
         handle = Entrez.efetch(db="pubmed", id=id_list, rettype="medline", retmode="text")
         records_text = handle.read()
@@ -155,7 +161,7 @@ def get_drug_info(drug_name, is_pro_user=False):
     final_response = f"✅ Hoạt chất đã nhận diện: **{hoat_chat_goc}**\n\n---\n\n{base_response_text}"
 
     if is_pro_user:
-        section_11_content = "\n\n---\n\n**11. Tóm tắt các Nghiên cứu Lâm sàng gần đây từ PubMed:**\n"
+        section_11_content = "\n\n---\n\n**11. Phân tích các Nghiên cứu Lâm sàng nổi bật (trong 2 năm gần đây):**\n"
         try:
             with st.spinner("Người dùng Pro: Đang truy vấn API của PubMed..."):
                 search_context = search_pubmed(hoat_chat_goc)
