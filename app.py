@@ -7,9 +7,9 @@ import pandas as pd
 import gspread
 from gspread_dataframe import get_as_dataframe
 from gspread.exceptions import SpreadsheetNotFound
+from googlesearch import search
 
 # --- KIỂM TRA TRẠNG THÁI BẢO TRÌ ---
-# ... (Giữ nguyên)
 is_maintenance = st.secrets.get("maintenance_mode", False) 
 if is_maintenance:
     st.set_page_config(page_title="Bảo trì", page_icon="🛠️")
@@ -19,12 +19,10 @@ if is_maintenance:
     st.stop()
 
 # --- 1. KHỞI TẠO TRẠNG THÁI PHIÊN ---
-# ... (Giữ nguyên)
 if 'history' not in st.session_state: st.session_state.history = []
 if 'pro_access' not in st.session_state: st.session_state.pro_access = False
 
 # --- 2. CẤU HÌNH VÀ TẢI PROMPTS ---
-# ... (Giữ nguyên)
 def load_prompt(file_path):
     try:
         with open(file_path, "r", encoding="utf-8") as f: return f.read()
@@ -44,7 +42,6 @@ PROMPT_SUMMARY = load_prompt("prompt_summary.txt")
 # --- 3. CÁC HÀM XỬ LÝ ---
 
 # --- HÀM XỬ LÝ MÃ TRUY CẬP ---
-# ... (Giữ nguyên)
 @st.cache_data(ttl=600)
 def get_access_codes_df():
     try:
@@ -91,31 +88,64 @@ def get_pro_model():
     model_name = st.secrets.get("models", {}).get("pro", "gemini-pro")
     return genai.GenerativeModel(model_name)
 
-def get_live_searches(drug_name):
-    from googlesearch import search
+# HÀM TÌM KIẾM ĐÃ ĐƯỢC NÂNG CẤP
+@st.cache_data(ttl=3600) # Cache kết quả tìm kiếm trong 1 giờ
+def get_live_searches_with_snippets(drug_name):
+    """
+    Thực hiện tìm kiếm Google và trả về context bao gồm cả tiêu đề và đoạn trích.
+    Lưu ý: Việc crawl dữ liệu web có thể không ổn định.
+    """
+    import requests
+    from bs4 import BeautifulSoup
+
     query = f'"{drug_name}" recent clinical trial systematic review site:pubmed.ncbi.nlm.nih.gov OR site:nejm.org OR site:thelancet.com OR site:cochranelibrary.com'
+    
+    # Sử dụng Google Search URL để tránh bị chặn
+    google_url = f"https://www.google.com/search?q={query.replace(' ', '+')}"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
+    
     try:
-        search_results = search(query, num_results=5, lang="en")
+        response = requests.get(google_url, headers=headers)
+        response.raise_for_status() # Kiểm tra nếu có lỗi HTTP
+        
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Tìm các khối kết quả tìm kiếm (có thể thay đổi tùy theo cấu trúc của Google)
+        search_blocks = soup.find_all('div', class_='g')
+        
         context = ""
-        for result in search_results:
-            context += f"- Nguồn: {result}\n\n"
-        return context if context else "Không tìm thấy kết quả tìm kiếm nào."
+        count = 0
+        for block in search_blocks:
+            if count >= 4: # Giới hạn 4 kết quả
+                break
+            
+            title_element = block.find('h3')
+            link_element = block.find('a')
+            snippet_element = block.find('div', class_='VwiC3b') # Lớp CSS này chứa snippet
+
+            if title_element and link_element and snippet_element:
+                title = title_element.get_text()
+                link = link_element['href']
+                snippet = snippet_element.get_text()
+                
+                context += f"- Tiêu đề: {title}\n- Đoạn trích: {snippet}\n- Nguồn: {link}\n\n"
+                count += 1
+
+        return context if context else "Không tìm thấy kết quả tìm kiếm nào có đoạn trích."
     except Exception as e:
-        print(f"Lỗi tìm kiếm: {e}")
-        return "Đã xảy ra lỗi trong quá trình tìm kiếm Google."
+        print(f"Lỗi tìm kiếm hoặc crawl dữ liệu: {e}")
+        return "Đã xảy ra lỗi trong quá trình tìm kiếm Google và trích xuất dữ liệu."
 
 @st.cache_data(ttl="6h")
 def get_drug_info(drug_name, is_pro_user=False):
+    # ... (Phần nhận diện hoạt chất gốc giữ nguyên) ...
     identifier_model = get_regular_model()
     prompt_nhan_dien_final = PROMPT_NHAN_DIEN.format(drug_name=drug_name)
     response_nhan_dien = identifier_model.generate_content(prompt_nhan_dien_final)
     response_text = response_nhan_dien.text
-    try:
-        hoat_chat_goc = response_text.split("Output:")[1].strip()
-    except IndexError:
-        hoat_chat_goc = response_text.strip()
-    if hoat_chat_goc == "INVALID" or not hoat_chat_goc:
-        return f"❌ Lỗi: '{drug_name}' không được nhận dạng là một tên thuốc hợp lệ."
+    try: hoat_chat_goc = response_text.split("Output:")[1].strip()
+    except IndexError: hoat_chat_goc = response_text.strip()
+    if hoat_chat_goc == "INVALID" or not hoat_chat_goc: return f"❌ Lỗi: '{drug_name}' không được nhận dạng là một tên thuốc hợp lệ."
 
     analysis_model = get_pro_model() if is_pro_user else get_regular_model()
     analysis_prompt = PROMPT_PRO if is_pro_user else PROMPT_REGULAR
@@ -131,7 +161,7 @@ def get_drug_info(drug_name, is_pro_user=False):
         section_11_content = "\n\n---\n\n**11. Nghiên cứu lâm sàng gần đây:**\n"
         try:
             with st.spinner("Người dùng Pro: Đang tìm kiếm các nghiên cứu mới nhất..."):
-                search_context = get_live_searches(hoat_chat_goc)
+                search_context = get_live_searches_with_snippets(hoat_chat_goc)
                 summary_prompt_final = PROMPT_SUMMARY.format(drug_name=hoat_chat_goc, search_results=search_context)
                 summary_model = get_pro_model()
                 summary_response = summary_model.generate_content(summary_prompt_final, generation_config=generation_config)
