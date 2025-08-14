@@ -12,6 +12,7 @@ from Bio import Entrez
 import time
 
 # --- KIỂM TRA TRẠNG THÁI BẢO TRÌ ---
+# ... (Giữ nguyên)
 is_maintenance = st.secrets.get("maintenance_mode", False) 
 if is_maintenance:
     st.set_page_config(page_title="Bảo trì", page_icon="🛠️")
@@ -21,10 +22,12 @@ if is_maintenance:
     st.stop()
 
 # --- 1. KHỞI TẠO TRẠNG THÁI PHIÊN ---
+# ... (Giữ nguyên)
 if 'history' not in st.session_state: st.session_state.history = []
 if 'pro_access' not in st.session_state: st.session_state.pro_access = False
 
 # --- 2. CẤU HÌNH VÀ TẢI PROMPTS ---
+# ... (Giữ nguyên)
 def load_prompt(file_path):
     try:
         with open(file_path, "r", encoding="utf-8") as f: return f.read()
@@ -42,6 +45,9 @@ PROMPT_PRO = load_prompt("prompt_pro.txt")
 PROMPT_SUMMARY = load_prompt("prompt_summary.txt")
 
 # --- 3. CÁC HÀM XỬ LÝ ---
+
+# --- HÀM XỬ LÝ MÃ TRUY CẬP ---
+# ... (Giữ nguyên)
 @st.cache_data(ttl=600)
 def get_access_codes_df():
     try:
@@ -78,6 +84,7 @@ def verify_code(user_code):
         except Exception: return False, "Lỗi định dạng ngày tháng trong Google Sheet."
     return False, "Loại mã không xác định."
 
+# --- HÀM XỬ LÝ DƯỢC ĐIỂN ---
 @st.cache_resource
 def get_regular_model():
     model_name = st.secrets.get("models", {}).get("regular", "gemini-2.5-flash-lite")
@@ -87,26 +94,35 @@ def get_pro_model():
     model_name = st.secrets.get("models", {}).get("pro", "gemini-pro")
     return genai.GenerativeModel(model_name)
 
+# HÀM TÌM KIẾM PUBMED (NÂNG CẤP BỘ LỌC THỜI GIAN)
 @st.cache_data(ttl=3600)
 def search_pubmed(drug_name):
+    """Thực hiện tìm kiếm trên PubMed trong vòng 2 năm gần nhất."""
     Entrez.email = "duocdien.ai.project@example.com"
     api_key = st.secrets.get("api_keys", {}).get("pubmed")
     if api_key:
         Entrez.api_key = api_key
+
+    # Tự động tạo bộ lọc ngày cho 2 năm gần nhất
     today = date.today()
     two_years_ago = today - timedelta(days=730)
     date_filter = f'AND ("{two_years_ago.strftime("%Y/%m/%d")}"[Date - Publication] : "{today.strftime("%Y/%m/%d")}"[Date - Publication])'
+    
     search_term = f'"{drug_name}"[Title/Abstract] AND ("clinical trial"[Publication Type] OR "systematic review"[Publication Type]) {date_filter}'
+    
     try:
         handle = Entrez.esearch(db="pubmed", term=search_term, retmax="5", sort="relevance")
         record = Entrez.read(handle)
         handle.close()
         id_list = record["IdList"]
+
         if not id_list:
             return "Không tìm thấy bài báo phù hợp nào trong 2 năm gần đây trên PubMed."
+
         handle = Entrez.efetch(db="pubmed", id=id_list, rettype="medline", retmode="text")
         records_text = handle.read()
         handle.close()
+
         context = ""
         articles = records_text.strip().split("\n\n")
         for article_text in articles:
@@ -115,14 +131,17 @@ def search_pubmed(drug_name):
             journal = next((line[6:] for line in article_text.split('\n') if line.startswith("JT  - ")), "N/A")
             pub_date = next((line[6:] for line in article_text.split('\n') if line.startswith("DP  - ")), "N/A")
             pmid = next((line[6:] for line in article_text.split('\n') if line.startswith("PMID- ")), "N/A")
+
             context += f"- Tiêu đề: {title}\n- Tạp chí: {journal}\n- Năm: {pub_date[:4]}\n- Tóm tắt: {abstract}\n- PMID: {pmid.strip()}\n\n"
             time.sleep(0.1)
+
         return context
     except Exception as e:
         return f"Đã xảy ra lỗi khi truy vấn API của PubMed: {e}"
 
 @st.cache_data(ttl="6h")
 def get_drug_info(drug_name, is_pro_user=False):
+    # ... (Phần còn lại của hàm này giữ nguyên, không thay đổi) ...
     identifier_model = get_regular_model()
     prompt_nhan_dien_final = PROMPT_NHAN_DIEN.format(drug_name=drug_name)
     response_nhan_dien = identifier_model.generate_content(prompt_nhan_dien_final)
@@ -158,16 +177,13 @@ def get_drug_info(drug_name, is_pro_user=False):
     return final_response
 
 # --- 4. HÀM LOGIC TRUNG TÂM ---
+# ... (Giữ nguyên)
 def run_lookup(drug_name):
     try:
         is_pro = st.session_state.get("pro_access", False)
         final_result = get_drug_info(drug_name, is_pro_user=is_pro)
         if not final_result.startswith("❌ Lỗi:"):
             st.markdown(final_result)
-            
-            # ĐÃ XÓA TÍNH NĂNG SAO CHÉP
-            
-            # Xử lý lịch sử
             if drug_name not in st.session_state.history:
                 st.session_state.history.insert(0, drug_name)
                 if len(st.session_state.history) > 10:
@@ -179,6 +195,7 @@ def run_lookup(drug_name):
         st.exception(e)
 
 # --- 5. GIAO DIỆN VÀ LOGIC CHÍNH ---
+# ... (Giữ nguyên)
 st.set_page_config(page_title="Dược Điển AI", page_icon="💊")
 st.title("Dược Điển AI 💊")
 st.caption("Dự án được phát triển bởi group CÂCK và AI")
