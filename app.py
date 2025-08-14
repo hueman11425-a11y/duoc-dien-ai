@@ -2,7 +2,6 @@ import streamlit as st
 import google.generativeai as genai
 import google.generativeai.types as genai_types
 import google.api_core.exceptions as ga_ex
-import re
 
 # --- 1. KHỞI TẠO TRẠNG THÁI PHIÊN (SESSION STATE) ---
 if 'history' not in st.session_state:
@@ -15,25 +14,49 @@ except (FileNotFoundError, KeyError):
     st.error("LỖI: Vui lòng tạo file .streamlit/secrets.toml và thêm `GOOGLE_API_KEY = 'KEY_CUA_BAN'` vào đó.")
     st.stop()
     
-PROMPT_NHAN_DIEN = """Nhiệm vụ của bạn là nhận diện (các) hoạt chất gốc từ tên thuốc được cung cấp.
-- Nếu Input là một biệt dược đã biết, hãy trả về (các) hoạt chất gốc của nó.
-- Nếu Input đã là một hoạt chất gốc, hãy trả về chính nó.
-- Nếu Input KHÔNG PHẢI là tên thuốc (ví dụ: một từ thông thường, một câu vô nghĩa), bạn BẮT BUỘC phải trả về duy nhất từ "INVALID".
-- Chỉ trả về tên hoạt chất hoặc từ "INVALID". Tuyệt đối không giải thích.
-Ví dụ:
-Input: Lipitor
-Output: Atorvastatin
-Input: Paracetamol
-Output: Paracetamol
+PROMPT_NHAN_DIEN = """Bạn là một chuyên gia nhận diện tên thuốc. Nhiệm vụ của bạn là tìm ra (các) hoạt chất gốc từ tên thuốc người dùng cung cấp. Hãy suy nghĩ từng bước một cách cẩn thận.
+
+**QUY TRÌNH SUY LUẬN BẮT BUỘC:**
+1.  **Phân tích đầu vào:** Tách tên thuốc, các hậu tố quan trọng (ví dụ: AM, Plus, Co, HCT), hàm lượng (ví dụ: 500mg), và dạng bào chế (ví dụ: tablet, capsule).
+2.  **Suy luận hoạt chất:** Dựa trên tên thuốc và các hậu tố quan trọng, kết hợp với kiến thức của bạn để suy ra (các) hoạt chất gốc. Bỏ qua hàm lượng và dạng bào chế trong bước này vì chúng không ảnh hưởng đến bản chất của hoạt chất.
+3.  **Định dạng Output:** Trả về DUY NHẤT một chuỗi chứa (các) tên hoạt chất, cách nhau bởi dấu phẩy và khoảng trắng (ví dụ: "Hoat chat A, Hoat chat B"). Nếu đầu vào không phải tên thuốc, trả về DUY NHẤT từ "INVALID".
+
+---
+**VÍ DỤ MẪU:**
+
+**Ví dụ 1:**
+Input: sita met tablet 500 mg
+Suy nghĩ:
+- Phân tích: Tên chính là "sita met". Dạng bào chế "tablet". Hàm lượng "500 mg".
+- Suy luận: "sita" là Sitagliptin, "met" là Metformin. Đây là thuốc phối hợp.
+Output: Sitagliptin, Metformin
+
+**Ví dụ 2:**
 Input: Troysar AM
+Suy nghĩ:
+- Phân tích: Tên chính là "Troysar". Hậu tố quan trọng là "AM".
+- Suy luận: "Troysar" là Losartan. Hậu tố "AM" chỉ sự phối hợp với Amlodipine.
 Output: Losartan, Amlodipine
-Input: a cat
+
+**Ví dụ 3:**
+Input: Augmentin 1g
+Suy nghĩ:
+- Phân tích: Tên chính là "Augmentin". Hàm lượng "1g".
+- Suy luận: "Augmentin" là biệt dược của sự phối hợp Amoxicillin và Clavulanic acid.
+Output: Amoxicillin, Clavulanic acid
+
+**Ví dụ 4:**
+Input: just a regular word
+Suy nghĩ:
+- Phân tích: Chuỗi này không chứa bất kỳ thuật ngữ y khoa hay tên thuốc nào.
+- Suy luận: Đây không phải là một loại thuốc.
 Output: INVALID
-Input: sex
-Output: INVALID
+---
+
+**BẮT ĐẦU NHIỆM VỤ:**
 
 Input: {drug_name}
-Output:
+Suy nghĩ:
 """
 
 PROMPT_GOC_RUT_GON = """
@@ -68,34 +91,6 @@ Khi tôi đưa tên một loại thuốc (luôn là tên gốc/hoạt chất), b
 """
 
 # --- 3. CÁC HÀM XỬ LÝ (Cache) ---
-
-def preprocess_drug_name(drug_name):
-    """
-    Hàm này làm sạch tên thuốc đầu vào để giúp AI nhận diện hoạt chất dễ dàng hơn.
-    Nó loại bỏ:
-    - Các hàm lượng (vd: 500mg, 10g)
-    - Các dạng bào chế phổ biến (vd: tablet, capsule, sr, xr)
-    - Các ký tự đặc biệt không cần thiết và khoảng trắng thừa.
-    """
-    if not isinstance(drug_name, str):
-        return ""
-        
-    processed_name = drug_name.lower()
-    
-    words_to_remove = [
-        'tablet', 'tablets', 'cap', 'capsule', 'capsules', 'caplet', 'caplets',
-        'sr', 'xr', 'er', 'hcl', 'plus', 'fort', 'forte'
-    ]
-    for word in words_to_remove:
-        processed_name = processed_name.replace(word, '')
-        
-    processed_name = re.sub(r'\d+\s*(mg|g|mcg|iu)?', '', processed_name)
-    
-    processed_name = re.sub(r'[^\w\s,]', '', processed_name)
-    processed_name = ' '.join(processed_name.split())
-    
-    return processed_name
-
 @st.cache_resource
 def get_model():
     return genai.GenerativeModel('gemini-2.5-flash-lite')
@@ -105,8 +100,18 @@ def get_drug_info(drug_name):
     model = get_model()
     prompt_nhan_dien_final = PROMPT_NHAN_DIEN.format(drug_name=drug_name)
     response_nhan_dien = model.generate_content(prompt_nhan_dien_final)
-    hoat_chat_goc = response_nhan_dien.text.strip()
-    if hoat_chat_goc == "INVALID":
+    
+    # Xử lý output từ "Chain of Thought" prompt
+    response_text = response_nhan_dien.text
+    try:
+        # Tìm dòng bắt đầu bằng "Output:" và lấy phần nội dung sau nó
+        hoat_chat_goc = response_text.split("Output:")[1].strip()
+    except IndexError:
+        # Nếu không tìm thấy "Output:", có thể AI trả về lỗi hoặc câu trả lời trực tiếp
+        # Lấy toàn bộ nội dung để xử lý ở bước sau
+        hoat_chat_goc = response_text.strip()
+
+    if hoat_chat_goc == "INVALID" or not hoat_chat_goc:
         return f"❌ Lỗi: '{drug_name}' không được nhận dạng là một tên thuốc hợp lệ."
 
     generation_config = {
@@ -123,15 +128,9 @@ def get_drug_info(drug_name):
     
 # --- 4. HÀM LOGIC TRUNG TÂM ---
 def run_lookup(drug_name):
-    """
-    Hàm logic trung tâm: làm sạch tên thuốc, tra cứu và hiển thị kết quả.
-    """
     try:
-        cleaned_drug_name = preprocess_drug_name(drug_name)
-
         with st.spinner(f"Đang tra cứu '{drug_name}'..."):
-            final_result = get_drug_info(cleaned_drug_name)
-
+            final_result = get_drug_info(drug_name)
         if not final_result.startswith("❌ Lỗi:"):
             st.markdown(final_result)
             if drug_name not in st.session_state.history:
@@ -139,12 +138,7 @@ def run_lookup(drug_name):
                 if len(st.session_state.history) > 10:
                      st.session_state.history.pop()
         else:
-            error_message = f"❌ Lỗi: '{drug_name}' không được nhận dạng là một tên thuốc hợp lệ."
-            if "không được nhận dạng" in final_result:
-                 st.error(error_message)
-            else:
-                 st.error(final_result)
-
+            st.error(final_result)
     except ga_ex.PermissionDenied as e:
         st.error("🚫 Lỗi Xác Thực: Google API Key của bạn không hợp lệ hoặc đã bị vô hiệu hóa.")
     except ga_ex.ResourceExhausted as e:
