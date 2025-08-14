@@ -10,6 +10,7 @@ from gspread_dataframe import get_as_dataframe
 from gspread.exceptions import SpreadsheetNotFound
 from Bio import Entrez
 import time
+from streamlit_copy_button import copy_button
 
 # --- KIỂM TRA TRẠNG THÁI BẢO TRÌ ---
 # ... (Giữ nguyên)
@@ -134,13 +135,17 @@ def get_drug_info(drug_name, is_pro_user=False):
     try: hoat_chat_goc = response_text.split("Output:")[1].strip()
     except IndexError: hoat_chat_goc = response_text.strip()
     if hoat_chat_goc == "INVALID" or not hoat_chat_goc: return f"❌ Lỗi: '{drug_name}' không được nhận dạng."
+
     analysis_model = get_pro_model() if is_pro_user else get_regular_model()
     analysis_prompt = PROMPT_PRO if is_pro_user else PROMPT_REGULAR
+    
     generation_config = {"max_output_tokens": 8192, "temperature": 0.6}
     full_prompt = f"{analysis_prompt}\n\nHãy tra cứu và trình bày thông tin cho thuốc sau đây: **{hoat_chat_goc}**"
+    
     response_phan_tich = analysis_model.generate_content(full_prompt, generation_config=generation_config)
     base_response_text = response_phan_tich.text
     final_response = f"✅ Hoạt chất đã nhận diện: **{hoat_chat_goc}**\n\n---\n\n{base_response_text}"
+
     if is_pro_user:
         section_11_content = "\n\n---\n\n**11. Phân tích các Nghiên cứu Lâm sàng nổi bật (trong 2 năm gần đây):**\n"
         try:
@@ -154,9 +159,10 @@ def get_drug_info(drug_name, is_pro_user=False):
             st.warning(f"Lỗi khi xử lý thông tin từ PubMed: {e}")
             section_11_content += "Đã xảy ra lỗi khi cố gắng tóm tắt dữ liệu từ PubMed."
         final_response += section_11_content
+        
     return final_response
 
-# --- 4. HÀM LOGIC TRUNG TÂM (ĐÃ CẬP NHẬT) ---
+# --- 4. HÀM LOGIC TRUNG TÂM ---
 def run_lookup(drug_name):
     try:
         is_pro = st.session_state.get("pro_access", False)
@@ -164,15 +170,9 @@ def run_lookup(drug_name):
         if not final_result.startswith("❌ Lỗi:"):
             st.markdown(final_result)
             
-            # GIẢI PHÁP SAO CHÉP MỚI
-            with st.expander("📄 Sao chép nội dung"):
-                st.text_area(
-                    label="Nội dung đầy đủ:", 
-                    value=final_result, 
-                    height=300, 
-                    key=f"copy_area_{drug_name}",
-                    label_visibility="collapsed"
-                )
+            # QUAY LẠI SỬ DỤNG COPY_BUTTON
+            st.markdown("---") 
+            copy_button(final_result, "Sao chép toàn bộ nội dung")
 
             # Xử lý lịch sử
             if drug_name not in st.session_state.history:
