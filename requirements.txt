@@ -4,3 +4,4 @@ requests
 gspread
 gspread-dataframe
 pandas
+googlesearch-python
