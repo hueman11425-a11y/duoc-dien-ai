@@ -3,6 +3,18 @@ import google.generativeai as genai
 import google.generativeai.types as genai_types
 import google.api_core.exceptions as ga_ex
 
+# --- KIỂM TRA TRẠNG THÁI BẢO TRÌ ---
+# Đọc "công tắc" từ secrets. Mặc định là False (không bảo trì) nếu không tìm thấy.
+is_maintenance = st.secrets.get("maintenance_mode", False) 
+
+if is_maintenance:
+    st.set_page_config(page_title="Bảo trì", page_icon="🛠️")
+    st.title("🛠️ Dược Điển AI đang được bảo trì")
+    # Lấy thông báo bảo trì từ secrets, nếu không có thì dùng thông báo mặc định.
+    message = st.secrets.get("maintenance_message", "Ứng dụng đang được cập nhật. Vui lòng quay lại sau.")
+    st.info(message)
+    st.stop() # Dừng toàn bộ phần còn lại của ứng dụng không cho chạy.
+
 # --- 1. KHỞI TẠO TRẠNG THÁI PHIÊN (SESSION STATE) ---
 if 'history' not in st.session_state:
     st.session_state.history = []
