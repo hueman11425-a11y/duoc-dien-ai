@@ -7,9 +7,11 @@ import pandas as pd
 import gspread
 from gspread_dataframe import get_as_dataframe
 from gspread.exceptions import SpreadsheetNotFound
-from googlesearch import search
+from Bio import Entrez
+import time
 
 # --- KIỂM TRA TRẠNG THÁI BẢO TRÌ ---
+# ... (Giữ nguyên)
 is_maintenance = st.secrets.get("maintenance_mode", False) 
 if is_maintenance:
     st.set_page_config(page_title="Bảo trì", page_icon="🛠️")
@@ -19,10 +21,12 @@ if is_maintenance:
     st.stop()
 
 # --- 1. KHỞI TẠO TRẠNG THÁI PHIÊN ---
+# ... (Giữ nguyên)
 if 'history' not in st.session_state: st.session_state.history = []
 if 'pro_access' not in st.session_state: st.session_state.pro_access = False
 
 # --- 2. CẤU HÌNH VÀ TẢI PROMPTS ---
+# ... (Giữ nguyên)
 def load_prompt(file_path):
     try:
         with open(file_path, "r", encoding="utf-8") as f: return f.read()
@@ -42,6 +46,7 @@ PROMPT_SUMMARY = load_prompt("prompt_summary.txt")
 # --- 3. CÁC HÀM XỬ LÝ ---
 
 # --- HÀM XỬ LÝ MÃ TRUY CẬP ---
+# ... (Giữ nguyên)
 @st.cache_data(ttl=600)
 def get_access_codes_df():
     try:
@@ -78,7 +83,7 @@ def verify_code(user_code):
         except Exception: return False, "Lỗi định dạng ngày tháng trong Google Sheet."
     return False, "Loại mã không xác định."
 
-# --- HÀM XỬ LÝ DƯỢC ĐIỂN (LOGIC PRO ĐƯỢC CẬP NHẬT) ---
+# --- HÀM XỬ LÝ DƯỢC ĐIỂN ---
 @st.cache_resource
 def get_regular_model():
     model_name = st.secrets.get("models", {}).get("regular", "gemini-2.5-flash-lite")
@@ -88,53 +93,47 @@ def get_pro_model():
     model_name = st.secrets.get("models", {}).get("pro", "gemini-pro")
     return genai.GenerativeModel(model_name)
 
-# HÀM TÌM KIẾM ĐÃ ĐƯỢC NÂNG CẤP
-@st.cache_data(ttl=3600) # Cache kết quả tìm kiếm trong 1 giờ
-def get_live_searches_with_snippets(drug_name):
-    """
-    Thực hiện tìm kiếm Google và trả về context bao gồm cả tiêu đề và đoạn trích.
-    Lưu ý: Việc crawl dữ liệu web có thể không ổn định.
-    """
-    import requests
-    from bs4 import BeautifulSoup
+# HÀM TÌM KIẾM PUBMED MỚI
+@st.cache_data(ttl=3600)
+def search_pubmed(drug_name):
+    """Thực hiện tìm kiếm trên PubMed bằng API và trả về context."""
+    Entrez.email = "duocdien.ai.project@example.com"  # Bắt buộc phải có email
+    api_key = st.secrets.get("api_keys", {}).get("pubmed")
+    if api_key:
+        Entrez.api_key = api_key
 
-    query = f'"{drug_name}" recent clinical trial systematic review site:pubmed.ncbi.nlm.nih.gov OR site:nejm.org OR site:thelancet.com OR site:cochranelibrary.com'
-    
-    # Sử dụng Google Search URL để tránh bị chặn
-    google_url = f"https://www.google.com/search?q={query.replace(' ', '+')}"
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
+    search_term = f'"{drug_name}"[Title/Abstract] AND ("clinical trial"[Publication Type] OR "systematic review"[Publication Type])'
     
     try:
-        response = requests.get(google_url, headers=headers)
-        response.raise_for_status() # Kiểm tra nếu có lỗi HTTP
-        
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Tìm các khối kết quả tìm kiếm (có thể thay đổi tùy theo cấu trúc của Google)
-        search_blocks = soup.find_all('div', class_='g')
-        
+        # Bước 1: Tìm kiếm ID các bài báo
+        handle = Entrez.esearch(db="pubmed", term=search_term, retmax="5", sort="relevance")
+        record = Entrez.read(handle)
+        handle.close()
+        id_list = record["IdList"]
+
+        if not id_list:
+            return "Không tìm thấy bài báo phù hợp nào gần đây trên PubMed."
+
+        # Bước 2: Lấy chi tiết của các bài báo đó
+        handle = Entrez.efetch(db="pubmed", id=id_list, rettype="medline", retmode="text")
+        records_text = handle.read()
+        handle.close()
+
+        # Bước 3: Phân tích và tạo context
         context = ""
-        count = 0
-        for block in search_blocks:
-            if count >= 4: # Giới hạn 4 kết quả
-                break
-            
-            title_element = block.find('h3')
-            link_element = block.find('a')
-            snippet_element = block.find('div', class_='VwiC3b') # Lớp CSS này chứa snippet
+        articles = records_text.strip().split("\n\n")
+        for article_text in articles:
+            title = next((line[6:] for line in article_text.split('\n') if line.startswith("TI  - ")), "N/A")
+            abstract = next((line[6:] for line in article_text.split('\n') if line.startswith("AB  - ")), "N/A")
+            journal = next((line[6:] for line in article_text.split('\n') if line.startswith("JT  - ")), "N/A")
+            pub_date = next((line[6:] for line in article_text.split('\n') if line.startswith("DP  - ")), "N/A")
 
-            if title_element and link_element and snippet_element:
-                title = title_element.get_text()
-                link = link_element['href']
-                snippet = snippet_element.get_text()
-                
-                context += f"- Tiêu đề: {title}\n- Đoạn trích: {snippet}\n- Nguồn: {link}\n\n"
-                count += 1
+            context += f"- Tiêu đề: {title}\n- Tạp chí: {journal}\n- Năm: {pub_date[:4]}\n- Tóm tắt: {abstract}\n\n"
+            time.sleep(0.1)  # Tạm dừng một chút để không gửi request quá nhanh
 
-        return context if context else "Không tìm thấy kết quả tìm kiếm nào có đoạn trích."
+        return context
     except Exception as e:
-        print(f"Lỗi tìm kiếm hoặc crawl dữ liệu: {e}")
-        return "Đã xảy ra lỗi trong quá trình tìm kiếm Google và trích xuất dữ liệu."
+        return f"Đã xảy ra lỗi khi truy vấn API của PubMed: {e}"
 
 @st.cache_data(ttl="6h")
 def get_drug_info(drug_name, is_pro_user=False):
@@ -145,7 +144,7 @@ def get_drug_info(drug_name, is_pro_user=False):
     response_text = response_nhan_dien.text
     try: hoat_chat_goc = response_text.split("Output:")[1].strip()
     except IndexError: hoat_chat_goc = response_text.strip()
-    if hoat_chat_goc == "INVALID" or not hoat_chat_goc: return f"❌ Lỗi: '{drug_name}' không được nhận dạng là một tên thuốc hợp lệ."
+    if hoat_chat_goc == "INVALID" or not hoat_chat_goc: return f"❌ Lỗi: '{drug_name}' không được nhận dạng."
 
     analysis_model = get_pro_model() if is_pro_user else get_regular_model()
     analysis_prompt = PROMPT_PRO if is_pro_user else PROMPT_REGULAR
@@ -158,17 +157,17 @@ def get_drug_info(drug_name, is_pro_user=False):
     final_response = f"✅ Hoạt chất đã nhận diện: **{hoat_chat_goc}**\n\n---\n\n{base_response_text}"
 
     if is_pro_user:
-        section_11_content = "\n\n---\n\n**11. Nghiên cứu lâm sàng gần đây:**\n"
+        section_11_content = "\n\n---\n\n**11. Tóm tắt các Nghiên cứu Lâm sàng gần đây từ PubMed:**\n"
         try:
-            with st.spinner("Người dùng Pro: Đang tìm kiếm các nghiên cứu mới nhất..."):
-                search_context = get_live_searches_with_snippets(hoat_chat_goc)
+            with st.spinner("Người dùng Pro: Đang truy vấn API của PubMed..."):
+                search_context = search_pubmed(hoat_chat_goc)
                 summary_prompt_final = PROMPT_SUMMARY.format(drug_name=hoat_chat_goc, search_results=search_context)
                 summary_model = get_pro_model()
                 summary_response = summary_model.generate_content(summary_prompt_final, generation_config=generation_config)
                 section_11_content += summary_response.text
         except Exception as e:
-            st.warning(f"Lỗi khi tìm kiếm thông tin Pro: {e}")
-            section_11_content += "Đã xảy ra lỗi khi cố gắng tìm kiếm các nghiên cứu gần đây."
+            st.warning(f"Lỗi khi xử lý thông tin từ PubMed: {e}")
+            section_11_content += "Đã xảy ra lỗi khi cố gắng tóm tắt dữ liệu từ PubMed."
         final_response += section_11_content
         
     return final_response
@@ -188,7 +187,7 @@ def run_lookup(drug_name):
         else:
             st.error(final_result)
     except Exception as e:
-        st.error("💥 Lỗi không xác định: Một sự cố không mong muốn đã xảy ra.")
+        st.error("💥 Lỗi không xác định.")
         st.exception(e)
 
 # --- 5. GIAO DIỆN VÀ LOGIC CHÍNH ---
