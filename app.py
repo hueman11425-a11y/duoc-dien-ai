@@ -10,7 +10,6 @@ from gspread_dataframe import get_as_dataframe
 from gspread.exceptions import SpreadsheetNotFound
 from Bio import Entrez
 import time
-from streamlit_copy_button import copy_button
 
 # --- KIỂM TRA TRẠNG THÁI BẢO TRÌ ---
 # ... (Giữ nguyên)
@@ -165,9 +164,15 @@ def run_lookup(drug_name):
         if not final_result.startswith("❌ Lỗi:"):
             st.markdown(final_result)
             
-            # THÊM NÚT SAO CHÉP VÀO ĐÂY
-            st.markdown("---") # Thêm một đường kẻ phân cách
-            copy_button(final_result, "Sao chép toàn bộ nội dung")
+            # GIẢI PHÁP SAO CHÉP MỚI
+            with st.expander("📄 Sao chép nội dung"):
+                st.text_area(
+                    label="Nội dung đầy đủ:", 
+                    value=final_result, 
+                    height=300, 
+                    key=f"copy_area_{drug_name}",
+                    label_visibility="collapsed"
+                )
 
             # Xử lý lịch sử
             if drug_name not in st.session_state.history:
