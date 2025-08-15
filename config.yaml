@@ -1,0 +1,21 @@
+credentials:
+  usernames:
+    # Người dùng mẫu 1
+    jsmith:
+      email: jsmith@gmail.com
+      name: John Smith
+      password: '$2b$12$0i.3..c67xSlf5U161K/I.d207.28.wAukA0J18zTsm3XepTz/8S' # Mật khẩu là '123'
+    # Người dùng mẫu 2
+    rbriggs:
+      email: rbriggs@gmail.com
+      name: Rebecca Briggs
+      password: '$2b$12$n8/yB.Y.303GAnYt..WdC.55f/5P3B/e5YJISi050d2Iq1l.Q5bWq' # Mật khẩu là '456'
+
+cookie:
+  expiry_days: 30
+  key: 'random_signature_key' # Bạn có thể đổi thành một chuỗi ký tự bí mật bất kỳ
+  name: 'random_cookie_name'
+
+preauthorized:
+  emails:
+  - msonbat@gmail.com # Email này có thể dùng để làm gì đó trong tương lai, tạm thời để trống hoặc để email mẫu
