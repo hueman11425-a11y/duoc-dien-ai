@@ -7,6 +7,11 @@ from gspread_dataframe import get_as_dataframe
 from Bio import Entrez
 import time
 
+# --- HẰNG SỐ GIỚI HẠN ---
+HISTORY_LIMIT = 20
+COLLECTION_LIMIT = 5
+DRUGS_PER_COLLECTION_LIMIT = 7
+
 # --- CÁC HÀM PROMPT VÀ KHỞI TẠO MODEL ---
 def load_prompt(file_path):
     try:
@@ -33,6 +38,7 @@ def get_pro_model():
 # --- CÁC HÀM XỬ LÝ GOOGLE SHEETS ---
 @st.cache_data(ttl=600)
 def get_access_codes_df():
+    # ... (Hàm này không thay đổi)
     try:
         credentials = st.secrets.connections.gsheets.credentials
         gspread_client = gspread.service_account_from_dict(credentials)
@@ -44,6 +50,7 @@ def get_access_codes_df():
         return pd.DataFrame()
 
 def verify_code(user_code):
+    # ... (Hàm này không thay đổi)
     if not user_code: return False, "Vui lòng nhập mã truy cập."
     codes_df = get_access_codes_df()
     if codes_df.empty: return False, "Không thể tải dữ liệu mã truy cập."
@@ -68,9 +75,10 @@ def verify_code(user_code):
         except Exception: return False, "Lỗi định dạng ngày tháng trong Google Sheet."
     return False, "Loại mã không xác định."
 
-# --- CÁC HÀM XỬ LÝ DỮ LIỆU & API ---
+# --- CÁC HÀM XỬ LÝ DỮ LIỆU & API (KHÔNG THAY ĐỔI) ---
 @st.cache_data(ttl=3600)
 def search_pubmed(drug_name):
+    # ... (Hàm này không thay đổi)
     Entrez.email = "duocdien.ai.project@example.com"
     api_key = st.secrets.get("api_keys", {}).get("pubmed")
     if api_key: Entrez.api_key = api_key
@@ -87,6 +95,7 @@ def search_pubmed(drug_name):
         handle = Entrez.efetch(db="pubmed", id=id_list, rettype="medline", retmode="text")
         records_text = handle.read()
         handle.close()
+        # ... (phần xử lý text không đổi)
         context = ""
         articles = records_text.strip().split("\n\n")
         for article_text in articles:
@@ -102,7 +111,8 @@ def search_pubmed(drug_name):
         return f"Đã xảy ra lỗi khi truy vấn API của PubMed: {e}"
 
 @st.cache_data(ttl="6h")
-def get_drug_info(drug_name, is_pro_user=False):
+def get_drug_info_from_api(drug_name, is_pro_user=False):
+    # ... (Hàm này là hàm get_drug_info cũ, chỉ đổi tên và vai trò)
     identifier_model = get_regular_model()
     prompt_nhan_dien_final = PROMPT_NHAN_DIEN.format(drug_name=drug_name)
     response_nhan_dien = identifier_model.generate_content(prompt_nhan_dien_final)
@@ -112,19 +122,18 @@ def get_drug_info(drug_name, is_pro_user=False):
     except IndexError:
         hoat_chat_goc = response_text.strip()
     if hoat_chat_goc == "INVALID" or not hoat_chat_goc:
-        return f"❌ Lỗi: '{drug_name}' không được nhận dạng."
-    
+        return f"❌ Lỗi: '{drug_name}' không được nhận dạng.", None
+
     analysis_model = get_pro_model() if is_pro_user else get_regular_model()
     analysis_prompt = PROMPT_PRO if is_pro_user else PROMPT_REGULAR
-    
     generation_config = {"max_output_tokens": 8192, "temperature": 0.6}
     full_prompt = f"{analysis_prompt}\n\nHãy tra cứu và trình bày thông tin cho thuốc sau đây: **{hoat_chat_goc}**"
-    
     response_phan_tich = analysis_model.generate_content(full_prompt, generation_config=generation_config)
     base_response_text = response_phan_tich.text
     final_response = f"✅ Hoạt chất đã nhận diện: **{hoat_chat_goc}**\n\n---\n\n{base_response_text}"
 
     if is_pro_user:
+        # ... (phần xử lý Pro không đổi)
         section_11_content = "\n\n---\n\n**11. Phân tích các Nghiên cứu Lâm sàng nổi bật (trong 2 năm gần đây):**\n"
         try:
             with st.spinner("Người dùng Pro: Đang truy vấn API của PubMed..."):
@@ -138,88 +147,111 @@ def get_drug_info(drug_name, is_pro_user=False):
             section_11_content += "Đã xảy ra lỗi khi cố gắng tóm tắt dữ liệu từ PubMed."
         final_response += section_11_content
         
-    return final_response
+    return final_response, hoat_chat_goc
 
-# --- CÁC HÀM TƯƠNG TÁC FIREBASE (LỊCH SỬ) ---
-def load_user_history(db, user_info):
-    """Tải lịch sử tra cứu của người dùng từ Firebase."""
+# --- CÁC HÀM TƯƠNG TÁC FIREBASE (ĐÃ VIẾT LẠI HOÀN TOÀN) ---
+
+def load_user_data(db, user_info):
+    """Tải dữ liệu cơ bản (lịch sử và bộ sưu tập) của người dùng."""
     try:
         user_id = user_info['localId']
         token = user_info['idToken']
-        history = db.child("user_data").child(user_id).child("history").get(token=token).val()
-        return history if history else []
-    except Exception as e:
-        return []
+        data = db.child("user_data").child(user_id).get(token=token).val()
+        if not data:
+            return [], {} # Lịch sử rỗng, bộ sưu tập rỗng
+        history = data.get("history", [])
+        collections = data.get("collections", {})
+        return history, collections
+    except Exception:
+        return [], {}
 
-def save_drug_to_history(db, user_info, drug_name):
-    """Lưu một thuốc vào lịch sử tra cứu của người dùng trên Firebase."""
+def load_user_result(db, user_info, drug_name):
+    """Tải một kết quả tra cứu đã lưu từ Firebase."""
     try:
         user_id = user_info['localId']
         token = user_info['idToken']
-        current_history = load_user_history(db, user_info)
+        result = db.child("user_data").child(user_id).child("results_cache").child(drug_name).get(token=token).val()
+        return result
+    except Exception:
+        return None
+
+def save_new_result(db, user_info, drug_name, result_text):
+    """Lưu một kết quả mới vào Firebase và quản lý giới hạn lịch sử."""
+    try:
+        user_id = user_info['localId']
+        token = user_info['idToken']
         
-        if drug_name not in current_history:
-            current_history.insert(0, drug_name)
-            if len(current_history) > 20:
-                current_history = current_history[:20]
-            db.child("user_data").child(user_id).child("history").set(current_history, token=token)
-    except Exception as e:
-        st.warning("Lỗi khi lưu lịch sử tra cứu.")
+        # Lấy dữ liệu hiện tại
+        current_data = db.child("user_data").child(user_id).get(token=token).val() or {}
+        history = current_data.get("history", [])
+        results_cache = current_data.get("results_cache", {})
 
-# --- CÁC HÀM TƯƠNG TÁC FIREBASE (BỘ SƯU TẬP) ---
-def load_user_collections(db, user_info):
-    """Tải toàn bộ bộ sưu tập của người dùng từ Firebase."""
-    try:
-        user_id = user_info['localId']
-        token = user_info['idToken']
-        collections = db.child("user_data").child(user_id).child("collections").get(token=token).val()
-        return collections if collections else {}
-    except Exception as e:
-        return {}
+        # Thêm kết quả mới và cập nhật lịch sử
+        results_cache[drug_name] = result_text
+        if drug_name in history:
+            history.remove(drug_name)
+        history.insert(0, drug_name)
+        
+        # Xử lý giới hạn 20 mục
+        drug_to_delete = None
+        if len(history) > HISTORY_LIMIT:
+            drug_to_delete = history.pop()
+            if drug_to_delete in results_cache:
+                del results_cache[drug_to_delete]
+        
+        # Chuẩn bị dữ liệu để ghi lên Firebase
+        update_data = {
+            "history": history,
+            "results_cache": results_cache
+        }
+        db.child("user_data").child(user_id).update(update_data, token=token)
 
-def add_drug_to_collection(db, user_info, collection_name, drug_name):
-    """Thêm một thuốc vào một bộ sưu tập cụ thể."""
-    try:
-        user_id = user_info['localId']
-        token = user_info['idToken']
-        drug_list = db.child("user_data").child(user_id).child("collections").child(collection_name).get(token=token).val()
-        if drug_list is None:
-            drug_list = []
-        if drug_name not in drug_list:
-            drug_list.append(drug_name)
-            db.child("user_data").child(user_id).child("collections").child(collection_name).set(drug_list, token=token)
-            return True
-        return False
-    except Exception as e:
-        st.warning(f"Lỗi khi thêm thuốc vào bộ sưu tập '{collection_name}'.")
-        return False
+        # Trả về lịch sử đã cập nhật để làm mới giao diện
+        return history
+    except Exception:
+        st.error("Lỗi khi lưu kết quả tra cứu.")
+        return None
 
 def create_new_collection(db, user_info, collection_name):
-    """Tạo một bộ sưu tập mới (rỗng)."""
-    print(f"--- DEBUG: Bắt đầu hàm create_new_collection với tên: '{collection_name}' ---") # Dòng debug
+    """Tạo bộ sưu tập mới và kiểm tra giới hạn."""
     if not collection_name or collection_name.isspace():
-        print("--- DEBUG: Tên bộ sưu tập rỗng, trả về False. ---") # Dòng debug
         return False, "Tên bộ sưu tập không được để trống."
     try:
         user_id = user_info['localId']
         token = user_info['idToken']
+        collections = db.child("user_data").child(user_id).child("collections").get(token=token).val() or {}
         
-        print(f"--- DEBUG: Đang tải các bộ sưu tập hiện có cho user_id: {user_id} ---") # Dòng debug
-        existing_collections = load_user_collections(db, user_info)
-        print(f"--- DEBUG: Các bộ sưu tập hiện có: {existing_collections} ---") # Dòng debug
-
-        if collection_name in existing_collections:
-            print(f"--- DEBUG: Bộ sưu tập '{collection_name}' đã tồn tại, trả về False. ---") # Dòng debug
+        if len(collections) >= COLLECTION_LIMIT:
+            return False, f"Đã đạt giới hạn {COLLECTION_LIMIT} bộ sưu tập."
+        if collection_name in collections:
             return False, f"Bộ sưu tập '{collection_name}' đã tồn tại."
-        
-        path_to_write = f"user_data/{user_id}/collections/{collection_name}"
-        print(f"--- DEBUG: Sắp ghi dữ liệu [] vào đường dẫn: {path_to_write} ---") # Dòng debug
-        
-        db.child("user_data").child(user_id).child("collections").child(collection_name).set([], token=token)
-        
-        print("--- DEBUG: Ghi dữ liệu thành công không có lỗi. Trả về True. ---") # Dòng debug
+
+        collections[collection_name] = [] # Tạo list rỗng
+        db.child("user_data").child(user_id).child("collections").set(collections, token=token)
         return True, f"Đã tạo thành công bộ sưu tập '{collection_name}'."
-    except Exception as e:
-        print(f"--- DEBUG: GẶP LỖI TRONG KHỐI TRY: {e} ---") # Dòng debug
-        st.warning(f"Lỗi khi tạo bộ sưu tập '{collection_name}'.")
+    except Exception:
         return False, "Đã xảy ra lỗi không xác định."
+
+def add_drug_to_collection(db, user_info, collection_name, drug_name):
+    """Thêm thuốc vào bộ sưu tập và kiểm tra giới hạn."""
+    try:
+        user_id = user_info['localId']
+        token = user_info['idToken']
+        collections = db.child("user_data").child(user_id).child("collections").get(token=token).val() or {}
+        
+        if collection_name not in collections:
+            return f"Lỗi: Không tìm thấy bộ sưu tập '{collection_name}'."
+        
+        drug_list = collections.get(collection_name, [])
+        if drug_name in drug_list:
+            return f"'{drug_name}' đã có trong bộ sưu tập này."
+
+        if len(drug_list) >= DRUGS_PER_COLLECTION_LIMIT:
+            return f"Bộ sưu tập '{collection_name}' đã đầy (tối đa {DRUGS_PER_COLLECTION_LIMIT} thuốc)."
+
+        drug_list.append(drug_name)
+        collections[collection_name] = drug_list
+        db.child("user_data").child(user_id).child("collections").set(collections, token=token)
+        return f"Đã thêm '{drug_name}' vào '{collection_name}'."
+    except Exception:
+        return "Đã xảy ra lỗi không xác định."
