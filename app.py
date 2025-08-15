@@ -36,23 +36,24 @@ if 'pro_access' not in st.session_state: st.session_state.pro_access = False
 if 'user_data_loaded' not in st.session_state: st.session_state.user_data_loaded = False
 if 'collections' not in st.session_state: st.session_state.collections = {}
 if 'last_drug_searched' not in st.session_state: st.session_state.last_drug_searched = None
+if "query_result" not in st.session_state: st.session_state.query_result = None
 
 # --- HÀM LOGIC TRUNG TÂM ---
 def run_lookup(drug_name):
-    st.session_state.last_drug_searched = None # Reset thuốc vừa tra cứu
+    st.session_state.last_drug_searched = None # Reset
+    st.session_state.query_result = None # Reset
     try:
         is_pro = st.session_state.get("pro_access", False)
-        # Cập nhật ô nhập liệu chính để người dùng biết họ đang xem gì
-        st.session_state.main_input = drug_name
         
         with st.spinner(f"Đang tra cứu thông tin cho {drug_name}..."):
             final_result = utils.get_drug_info(drug_name, is_pro_user=is_pro)
         
+        st.session_state.query_result = final_result # Lưu kết quả vào session state
+        
         if not final_result.startswith("❌ Lỗi:"):
-            st.session_state.query_result = final_result # Lưu kết quả vào session state
             user_info = st.session_state.get("user_info")
             hoat_chat_da_nhan_dien = final_result.split("**")[1]
-            st.session_state.last_drug_searched = hoat_chat_da_nhan_dien # Lưu lại thuốc vừa tra cứu thành công
+            st.session_state.last_drug_searched = hoat_chat_da_nhan_dien
             
             if user_info: # Nếu người dùng đã đăng nhập
                 utils.save_drug_to_history(firebase_db, user_info, hoat_chat_da_nhan_dien)
@@ -62,8 +63,6 @@ def run_lookup(drug_name):
                     st.session_state.history.insert(0, drug_name)
                     if len(st.session_state.history) > 10:
                         st.session_state.history.pop()
-        else:
-            st.session_state.query_result = final_result # Lưu cả lỗi vào
     except Exception as e:
         st.error("💥 Lỗi không xác định.")
         st.exception(e)
@@ -94,10 +93,10 @@ if st.button("Tra cứu"):
         st.warning("Vui lòng nhập tên thuốc trước khi tra cứu.")
     else:
         run_lookup(drug_name_input)
-        st.rerun() # Rerun để hiển thị kết quả đã lưu trong session state
+        # Không cần rerun ở đây nữa, vì phần hiển thị sẽ tự cập nhật
 
 # --- HIỂN THỊ KẾT QUẢ TRA CỨU ---
-if "query_result" in st.session_state and st.session_state.query_result:
+if st.session_state.query_result:
     result_to_display = st.session_state.query_result
     if result_to_display.startswith("❌ Lỗi:") or result_to_display.startswith("💥"):
         st.error(result_to_display)
@@ -136,15 +135,13 @@ if is_logged_in and st.session_state.last_drug_searched:
 # --- SIDEBAR ---
 with st.sidebar:
     st.header("Lịch sử tra cứu")
-
     if not st.session_state.history:
         st.info("Chưa có thuốc nào được tra cứu.")
     else:
         for drug in st.session_state.history:
             if st.button(drug, key=f"history_{drug}", use_container_width=True):
-                # Thay vì dùng callback, gọi thẳng run_lookup và rerun
-                run_lookup(drug)
-                st.rerun()
+                st.session_state.main_input = drug # Cập nhật ô input
+                run_lookup(drug) # Chạy tra cứu
 
     st.markdown("---")
 
@@ -181,9 +178,8 @@ with st.sidebar:
                     else:
                         for drug in drugs:
                             if st.button(drug, key=f"collection_{name}_{drug}", use_container_width=True):
-                                # Tương tự, gọi thẳng run_lookup và rerun
-                                run_lookup(drug)
-                                st.rerun()
+                                st.session_state.main_input = drug # Cập nhật ô input
+                                run_lookup(drug) # Chạy tra cứu
         st.markdown("---")
 
     with st.container(border=True):
