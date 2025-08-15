@@ -103,7 +103,7 @@ if is_logged_in and st.session_state.last_drug_searched:
         with col1:
             selected_collection = st.selectbox("Chọn bộ sưu tập:", options=list(collections.keys()))
         with col2:
-            st.write("") # Thêm khoảng trống để nút thẳng hàng
+            st.write("") 
             st.write("")
             if st.button("Thêm thuốc", use_container_width=True):
                 user_info = st.session_state.user_info
@@ -111,7 +111,7 @@ if is_logged_in and st.session_state.last_drug_searched:
                 if utils.add_drug_to_collection(firebase_db, user_info, selected_collection, drug_to_add):
                     st.success(f"Đã thêm '{drug_to_add}' vào '{selected_collection}'.")
                     st.session_state.collections = utils.load_user_collections(firebase_db, user_info)
-                    st.rerun() # <- THÊM DÒNG NÀY
+                    st.rerun() 
                 else:
                     st.warning(f"'{drug_to_add}' đã có trong '{selected_collection}'.")
 
@@ -139,11 +139,10 @@ with st.sidebar:
                 if success:
                     st.success(message)
                     st.session_state.collections = utils.load_user_collections(firebase_db, user_info)
-                    st.rerun() # <- THÊM DÒNG NÀY
+                    st.rerun()
                 else:
                     st.error(message)
 
-        # Hiển thị các bộ sưu tập đã có
         collections = st.session_state.get("collections", {})
         if not collections:
             st.info("Chưa có bộ sưu tập nào.")
