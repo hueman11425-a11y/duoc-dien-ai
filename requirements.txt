@@ -4,4 +4,3 @@ gspread
 gspread-dataframe
 pandas
 biopython
-streamlit-toggle-switch
