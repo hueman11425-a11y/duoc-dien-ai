@@ -15,8 +15,3 @@ cookie:
   expiry_days: 30
   key: 'random_signature_key' 
   name: 'random_cookie_name'
-
-# THAY ĐỔI Ở ĐÂY
-pre_authorized:
-  emails:
-  - msonbat@gmail.com
