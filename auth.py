@@ -37,10 +37,13 @@ def display_auth_forms(auth):
             user_email = st.session_state.user_info['email']
             st.success(f"Chào mừng, {user_email}")
             if st.button("Đăng xuất"):
+                # Reset tất cả các session state liên quan đến người dùng
                 st.session_state.user_info = None
                 st.session_state.history = []
                 st.session_state.pro_access = False
-                st.session_state.history_loaded = False # Reset cờ báo đã tải lịch sử
+                st.session_state.user_data_loaded = False
+                st.session_state.collections = {}
+                st.session_state.last_drug_searched = None
                 st.rerun()
         else:
             choice = st.selectbox("Đăng nhập / Đăng ký", ["Tiếp tục với tư cách khách", "Đăng nhập", "Đăng ký"])
