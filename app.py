@@ -33,10 +33,13 @@ if is_maintenance:
 # --- KHỞI TẠO TRẠNG THÁI PHIÊN ---
 if 'history' not in st.session_state: st.session_state.history = []
 if 'pro_access' not in st.session_state: st.session_state.pro_access = False
-if 'history_loaded' not in st.session_state: st.session_state.history_loaded = False
+if 'user_data_loaded' not in st.session_state: st.session_state.user_data_loaded = False
+if 'collections' not in st.session_state: st.session_state.collections = {}
+if 'last_drug_searched' not in st.session_state: st.session_state.last_drug_searched = None
 
 # --- HÀM LOGIC TRUNG TÂM ---
 def run_lookup(drug_name):
+    st.session_state.last_drug_searched = None # Reset thuốc vừa tra cứu
     try:
         is_pro = st.session_state.get("pro_access", False)
         final_result = utils.get_drug_info(drug_name, is_pro_user=is_pro)
@@ -44,13 +47,12 @@ def run_lookup(drug_name):
         if not final_result.startswith("❌ Lỗi:"):
             st.markdown(final_result)
             user_info = st.session_state.get("user_info")
+            hoat_chat_da_nhan_dien = final_result.split("**")[1]
+            st.session_state.last_drug_searched = hoat_chat_da_nhan_dien # Lưu lại thuốc vừa tra cứu thành công
             
             if user_info: # Nếu người dùng đã đăng nhập
-                hoat_chat_da_nhan_dien = final_result.split("**")[1] # Lấy hoạt chất đã nhận diện
                 utils.save_drug_to_history(firebase_db, user_info, hoat_chat_da_nhan_dien)
-                # Tải lại lịch sử ngay trong session state để cập nhật sidebar
                 st.session_state.history = utils.load_user_history(firebase_db, user_info)
-
             else: # Nếu là khách
                 if drug_name not in st.session_state.history:
                     st.session_state.history.insert(0, drug_name)
@@ -69,37 +71,99 @@ st.set_page_config(page_title="Dược Điển AI", page_icon="💊")
 is_logged_in = auth.display_auth_forms(firebase_auth)
 
 # --- TẢI DỮ LIỆU NGƯỜI DÙNG KHI ĐĂNG NHẬP ---
-if is_logged_in and not st.session_state.history_loaded:
+if is_logged_in and not st.session_state.user_data_loaded:
     user_info = st.session_state.user_info
-    st.session_state.history = utils.load_user_history(firebase_db, user_info)
-    st.session_state.history_loaded = True
+    with st.spinner("Đang tải dữ liệu của bạn..."):
+        st.session_state.history = utils.load_user_history(firebase_db, user_info)
+        st.session_state.collections = utils.load_user_collections(firebase_db, user_info)
+    st.session_state.user_data_loaded = True
 
 # --- GIAO DIỆN CHÍNH ---
 st.title("Dược Điển AI 💊")
 st.caption("Dự án được phát triển bởi group CÂCK và AI")
 
-# --- SIDEBAR (phần còn lại) ---
+# --- KHUNG NHẬP LIỆU CHÍNH ---
+drug_name_input = st.text_input("Nhập tên thuốc (biệt dược hoặc hoạt chất):", key="main_input")
+if st.button("Tra cứu"):
+    if not drug_name_input:
+        st.warning("Vui lòng nhập tên thuốc trước khi tra cứu.")
+    else:
+        run_lookup(drug_name_input)
+
+# --- KHU VỰC LƯU VÀO BỘ SƯU TẬP (CHỈ HIỆN KHI CẦN) ---
+if is_logged_in and st.session_state.last_drug_searched:
+    st.markdown("---")
+    st.subheader(f"Lưu '{st.session_state.last_drug_searched}' vào bộ sưu tập")
+    
+    collections = st.session_state.get("collections", {})
+    if not collections:
+        st.info("Bạn chưa có bộ sưu tập nào. Hãy tạo ở thanh công cụ bên trái.")
+    else:
+        col1, col2 = st.columns([2,1])
+        with col1:
+            selected_collection = st.selectbox("Chọn bộ sưu tập:", options=list(collections.keys()))
+        with col2:
+            st.write("") # Thêm khoảng trống để nút thẳng hàng
+            st.write("")
+            if st.button("Thêm thuốc", use_container_width=True):
+                user_info = st.session_state.user_info
+                drug_to_add = st.session_state.last_drug_searched
+                if utils.add_drug_to_collection(firebase_db, user_info, selected_collection, drug_to_add):
+                    st.success(f"Đã thêm '{drug_to_add}' vào '{selected_collection}'.")
+                    # Tải lại collections để cập nhật sidebar
+                    st.session_state.collections = utils.load_user_collections(firebase_db, user_info)
+                else:
+                    st.warning(f"'{drug_to_add}' đã có trong '{selected_collection}'.")
+
+# --- SIDEBAR ---
 with st.sidebar:
-    # Lịch sử và phản hồi hiển thị cho tất cả mọi người
     st.header("Lịch sử tra cứu")
     if not st.session_state.history:
         st.info("Chưa có thuốc nào được tra cứu.")
     else:
         for drug in st.session_state.history:
             if st.button(drug, key=f"history_{drug}", use_container_width=True):
-                # Khi bấm nút từ lịch sử, ta coi như tra cứu lại
-                st.session_state.main_input = drug 
-                # Không gọi run_lookup trực tiếp để tránh lưu lại lịch sử trùng lặp
-                # Thay vào đó, ta sẽ rerun và để logic tra cứu chính xử lý
+                st.session_state.main_input = drug
+                st.rerun()
 
     st.markdown("---")
+
+    # --- PHẦN BỘ SƯU TẬP TRÊN SIDEBAR ---
+    if is_logged_in:
+        st.header("Bộ sưu tập")
+        with st.form("new_collection_form", clear_on_submit=True):
+            new_collection_name = st.text_input("Tên bộ sưu tập mới:")
+            if st.form_submit_button("Tạo mới"):
+                user_info = st.session_state.user_info
+                success, message = utils.create_new_collection(firebase_db, user_info, new_collection_name)
+                if success:
+                    st.success(message)
+                    # Tải lại collections để cập nhật
+                    st.session_state.collections = utils.load_user_collections(firebase_db, user_info)
+                else:
+                    st.error(message)
+
+        # Hiển thị các bộ sưu tập đã có
+        collections = st.session_state.get("collections", {})
+        if not collections:
+            st.info("Chưa có bộ sưu tập nào.")
+        else:
+            for name, drugs in collections.items():
+                with st.expander(f"{name} ({len(drugs)} thuốc)"):
+                    if not drugs:
+                        st.write("Bộ sưu tập này trống.")
+                    else:
+                        for drug in drugs:
+                            if st.button(drug, key=f"collection_{name}_{drug}", use_container_width=True):
+                                st.session_state.main_input = drug
+                                st.rerun()
+        st.markdown("---")
+
     with st.container(border=True):
         st.write("**Bạn có ý tưởng để cải thiện ứng dụng?**")
         st.link_button("Gửi phản hồi ngay!", url="https://forms.gle/M44GDS4hJ7LpY7b98", help="Mở form góp ý trong một tab mới")
 
-    # Mục Pro chỉ hiển thị khi đã đăng nhập
     if is_logged_in:
-        st.markdown("---")
         st.header("Truy cập Pro")
         if st.session_state.get("pro_access"):
             st.success("Bạn đã có quyền truy cập Pro.")
@@ -112,16 +176,3 @@ with st.sidebar:
                     st.rerun()
                 else:
                     st.error(message)
-
-# --- KHUNG NHẬP LIỆU CHÍNH ---
-if not is_logged_in:
-    st.info("Bạn đang sử dụng với tư cách khách. Đăng nhập để lưu lịch sử và sử dụng các tính năng nâng cao.")
-
-drug_name_input = st.text_input("Nhập tên thuốc (biệt dược hoặc hoạt chất):", key="main_input")
-lookup_button = st.button("Tra cứu")
-
-if lookup_button:
-    if not drug_name_input:
-        st.warning("Vui lòng nhập tên thuốc trước khi tra cứu.")
-    else:
-        run_lookup(drug_name_input)
