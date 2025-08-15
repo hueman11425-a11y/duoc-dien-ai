@@ -110,8 +110,8 @@ if is_logged_in and st.session_state.last_drug_searched:
                 drug_to_add = st.session_state.last_drug_searched
                 if utils.add_drug_to_collection(firebase_db, user_info, selected_collection, drug_to_add):
                     st.success(f"Đã thêm '{drug_to_add}' vào '{selected_collection}'.")
-                    # Tải lại collections để cập nhật sidebar
                     st.session_state.collections = utils.load_user_collections(firebase_db, user_info)
+                    st.rerun() # <- THÊM DÒNG NÀY
                 else:
                     st.warning(f"'{drug_to_add}' đã có trong '{selected_collection}'.")
 
@@ -138,8 +138,8 @@ with st.sidebar:
                 success, message = utils.create_new_collection(firebase_db, user_info, new_collection_name)
                 if success:
                     st.success(message)
-                    # Tải lại collections để cập nhật
                     st.session_state.collections = utils.load_user_collections(firebase_db, user_info)
+                    st.rerun() # <- THÊM DÒNG NÀY
                 else:
                     st.error(message)
 
