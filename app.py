@@ -42,10 +42,14 @@ def run_lookup(drug_name):
     st.session_state.last_drug_searched = None # Reset thuốc vừa tra cứu
     try:
         is_pro = st.session_state.get("pro_access", False)
-        final_result = utils.get_drug_info(drug_name, is_pro_user=is_pro)
+        # Cập nhật ô nhập liệu chính để người dùng biết họ đang xem gì
+        st.session_state.main_input = drug_name
+        
+        with st.spinner(f"Đang tra cứu thông tin cho {drug_name}..."):
+            final_result = utils.get_drug_info(drug_name, is_pro_user=is_pro)
         
         if not final_result.startswith("❌ Lỗi:"):
-            st.markdown(final_result)
+            st.session_state.query_result = final_result # Lưu kết quả vào session state
             user_info = st.session_state.get("user_info")
             hoat_chat_da_nhan_dien = final_result.split("**")[1]
             st.session_state.last_drug_searched = hoat_chat_da_nhan_dien # Lưu lại thuốc vừa tra cứu thành công
@@ -59,10 +63,11 @@ def run_lookup(drug_name):
                     if len(st.session_state.history) > 10:
                         st.session_state.history.pop()
         else:
-            st.error(final_result)
+            st.session_state.query_result = final_result # Lưu cả lỗi vào
     except Exception as e:
         st.error("💥 Lỗi không xác định.")
         st.exception(e)
+        st.session_state.query_result = "💥 Lỗi không xác định."
 
 # --- BẮT ĐẦU GIAO DIỆN ---
 st.set_page_config(page_title="Dược Điển AI", page_icon="💊")
@@ -89,6 +94,15 @@ if st.button("Tra cứu"):
         st.warning("Vui lòng nhập tên thuốc trước khi tra cứu.")
     else:
         run_lookup(drug_name_input)
+        st.rerun() # Rerun để hiển thị kết quả đã lưu trong session state
+
+# --- HIỂN THỊ KẾT QUẢ TRA CỨU ---
+if "query_result" in st.session_state and st.session_state.query_result:
+    result_to_display = st.session_state.query_result
+    if result_to_display.startswith("❌ Lỗi:") or result_to_display.startswith("💥"):
+        st.error(result_to_display)
+    else:
+        st.markdown(result_to_display)
 
 # --- KHU VỰC LƯU VÀO BỘ SƯU TẬP (CHỈ HIỆN KHI CẦN) ---
 if is_logged_in and st.session_state.last_drug_searched:
@@ -123,21 +137,14 @@ if is_logged_in and st.session_state.last_drug_searched:
 with st.sidebar:
     st.header("Lịch sử tra cứu")
 
-    # --- SỬA LỖI: DÙNG CALLBACK CHO CÁC NÚT LỊCH SỬ ---
-    def handle_history_click(drug_name):
-        st.session_state.main_input = drug_name
-
     if not st.session_state.history:
         st.info("Chưa có thuốc nào được tra cứu.")
     else:
         for drug in st.session_state.history:
-            st.button(
-                drug, 
-                key=f"history_{drug}", 
-                on_click=handle_history_click, 
-                args=(drug,), 
-                use_container_width=True
-            )
+            if st.button(drug, key=f"history_{drug}", use_container_width=True):
+                # Thay vì dùng callback, gọi thẳng run_lookup và rerun
+                run_lookup(drug)
+                st.rerun()
 
     st.markdown("---")
 
@@ -167,23 +174,16 @@ with st.sidebar:
         if not collections:
             st.info("Chưa có bộ sưu tập nào.")
         else:
-            # --- SỬA LỖI: DÙNG CALLBACK CHO CÁC NÚT TRONG BỘ SƯU TẬP ---
-            def handle_collection_drug_click(drug_name):
-                st.session_state.main_input = drug_name
-            
             for name, drugs in collections.items():
                 with st.expander(f"{name} ({len(drugs)} thuốc)"):
                     if not drugs:
                         st.write("Bộ sưu tập này trống.")
                     else:
                         for drug in drugs:
-                            st.button(
-                                drug, 
-                                key=f"collection_{name}_{drug}", 
-                                on_click=handle_collection_drug_click, 
-                                args=(drug,), 
-                                use_container_width=True
-                            )
+                            if st.button(drug, key=f"collection_{name}_{drug}", use_container_width=True):
+                                # Tương tự, gọi thẳng run_lookup và rerun
+                                run_lookup(drug)
+                                st.rerun()
         st.markdown("---")
 
     with st.container(border=True):
