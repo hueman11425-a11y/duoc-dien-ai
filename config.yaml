@@ -13,9 +13,10 @@ credentials:
 
 cookie:
   expiry_days: 30
-  key: 'random_signature_key' # Bạn có thể đổi thành một chuỗi ký tự bí mật bất kỳ
+  key: 'random_signature_key' 
   name: 'random_cookie_name'
 
-preauthorized:
+# THAY ĐỔI Ở ĐÂY
+pre_authorized:
   emails:
-  - msonbat@gmail.com # Email này có thể dùng để làm gì đó trong tương lai, tạm thời để trống hoặc để email mẫu
+  - msonbat@gmail.com
