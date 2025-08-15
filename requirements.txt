@@ -1,7 +1,0 @@
-streamlit
-google-generativeai
-gspread
-gspread-dataframe
-pandas
-biopython
-streamlit-antd-toggle
