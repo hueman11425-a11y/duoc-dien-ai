@@ -103,12 +103,13 @@ if is_logged_in and st.session_state.last_drug_searched:
         def handle_add_drug_to_collection():
             user_info = st.session_state.user_info
             drug_to_add = st.session_state.last_drug_searched
-            # Lấy collection được chọn từ session_state
             selected_collection = st.session_state.get("collection_selector")
 
             if utils.add_drug_to_collection(firebase_db, user_info, selected_collection, drug_to_add):
                 st.success(f"Đã thêm '{drug_to_add}' vào '{selected_collection}'.")
-                st.session_state.collections = utils.load_user_collections(firebase_db, user_info)
+                # CẬP NHẬT TRỰC TIẾP SESSION STATE
+                if drug_to_add not in st.session_state.collections[selected_collection]:
+                    st.session_state.collections[selected_collection].append(drug_to_add)
             else:
                 st.warning(f"'{drug_to_add}' đã có trong '{selected_collection}'.")
 
@@ -148,8 +149,9 @@ with st.sidebar:
             success, message = utils.create_new_collection(firebase_db, user_info, collection_name_to_create)
             if success:
                 st.success(message)
-                st.session_state.collections = utils.load_user_collections(firebase_db, user_info)
-                # Xóa chữ trong ô input sau khi tạo thành công - an toàn trong callback
+                # CẬP NHẬT TRỰC TIẾP SESSION STATE
+                st.session_state.collections[collection_name_to_create] = []
+                # Xóa chữ trong ô input sau khi tạo thành công
                 st.session_state.new_collection_input = ""
             else:
                 st.error(message)
