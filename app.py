@@ -40,45 +40,41 @@ except (FileNotFoundError, KeyError):
 # --- KHỞI TẠO TRẠNG THÁI PHIÊN ---
 if 'user_data_loaded' not in st.session_state: st.session_state.user_data_loaded = False
 if "query_result" not in st.session_state: st.session_state.query_result = None
-# Khởi tạo history cho cả khách và người dùng đăng nhập
 if 'history' not in st.session_state: st.session_state.history = []
-
+if 'guest_cache' not in st.session_state: st.session_state.guest_cache = {} # Bộ nhớ tạm cho khách
 
 # --- HÀM LOGIC TRUNG TÂM ---
 def run_lookup(drug_name):
-    st.session_state.query_result = None # Xóa kết quả cũ trước khi tra cứu
+    st.session_state.query_result = None
     user_info = st.session_state.get("user_info")
     is_pro = st.session_state.get("pro_access", False)
 
     with st.spinner(f"Đang tra cứu '{drug_name}'..."):
-        # Bước 1: Kiểm tra trong kho lưu trữ vĩnh viễn (chỉ cho người dùng đăng nhập)
         if user_info:
             cached_result = utils.load_user_result(firebase_db, user_info, drug_name)
             if cached_result:
                 st.session_state.query_result = cached_result
-                # Cập nhật lại history list phòng trường hợp nó chưa đồng bộ
                 if drug_name not in st.session_state.history:
                      st.session_state.history.insert(0, drug_name)
                 return
 
-        # Bước 2: Nếu không có, gọi API
         api_result, identified_name = utils.get_drug_info_from_api(drug_name, is_pro)
         
-        # Bước 3: Xử lý kết quả
         st.session_state.query_result = api_result
         if user_info:
-            # Nếu là người dùng đăng nhập, lưu kết quả mới vào kho vĩnh viễn
             if identified_name:
                 updated_history = utils.save_new_result(firebase_db, user_info, identified_name, api_result)
                 st.session_state.history = updated_history
         else:
-            # NẾU LÀ KHÁCH, LƯU VÀO LỊCH SỬ TẠM THỜI
             if identified_name:
+                # Lưu vào lịch sử tạm và bộ nhớ tạm của khách
+                st.session_state.guest_cache[identified_name] = api_result
                 if identified_name not in st.session_state.history:
                     st.session_state.history.insert(0, identified_name)
-                    if len(st.session_state.history) > 10: # Giới hạn 10 mục cho khách
-                        st.session_state.history.pop()
-
+                    if len(st.session_state.history) > 10:
+                        drug_to_remove = st.session_state.history.pop()
+                        if drug_to_remove in st.session_state.guest_cache:
+                            del st.session_state.guest_cache[drug_to_remove]
 
 # --- BẮT ĐẦU GIAO DIỆN ---
 st.set_page_config(page_title="Dược Điển AI", page_icon="💊")
@@ -113,11 +109,11 @@ if st.session_state.query_result:
         st.error(result_to_display)
     else:
         st.markdown(result_to_display)
-        # Phần lưu vào bộ sưu tập chỉ hiện ra khi có kết quả thành công
         identified_name_from_result = result_to_display.split("**")[1] if "**" in result_to_display else None
         if is_logged_in and identified_name_from_result:
             st.markdown("---")
             st.subheader(f"Lưu '{identified_name_from_result}' vào bộ sưu tập")
+            # ... (Phần code này không đổi)
             collections = st.session_state.get("collections", {})
             if not collections:
                 st.info("Bạn chưa có bộ sưu tập nào. Hãy tạo ở thanh công cụ bên trái.")
@@ -136,12 +132,10 @@ if st.session_state.query_result:
                         st.session_state.collections = collections_new
                         st.rerun()
 
-
 # --- SIDEBAR ---
 with st.sidebar:
     st.header("Lịch sử tra cứu")
     
-    # Khung chứa có thanh cuộn áp dụng cho cả khách và người dùng
     history_container = st.container(height=300)
     with history_container:
         if not st.session_state.history:
@@ -151,10 +145,19 @@ with st.sidebar:
                 col1, col2 = st.columns([0.8, 0.2])
                 with col1:
                     if st.button(drug, key=f"history_{drug}", use_container_width=True):
-                        run_lookup(drug)
+                        user_info = st.session_state.get("user_info")
+                        if user_info:
+                            # Người dùng đăng nhập: tra cứu lại để lấy từ Firebase
+                            run_lookup(drug)
+                        else:
+                            # Khách: lấy trực tiếp từ bộ nhớ tạm
+                            st.session_state.query_result = st.session_state.guest_cache.get(drug)
+                            st.session_state.main_input = drug
+
                 with col2:
                     if is_logged_in:
                         with st.popover("➕", use_container=True):
+                            # ... (Phần code này không đổi)
                             collections = st.session_state.get("collections", {})
                             if not collections:
                                 st.write("Chưa có bộ sưu tập.")
@@ -172,6 +175,7 @@ with st.sidebar:
 
     # --- PHẦN BỘ SƯU TẬP ---
     if is_logged_in:
+        # ... (Toàn bộ phần code này không đổi)
         st.header("Bộ sưu tập")
         def handle_create_collection():
             coll_name = st.session_state.new_collection_input
@@ -203,6 +207,7 @@ with st.sidebar:
         st.link_button("Gửi phản hồi ngay!", url="https://forms.gle/M44GDS4hJ7LpY7b98")
 
     if is_logged_in:
+        # ... (Phần code này không đổi)
         st.header("Truy cập Pro")
         if st.session_state.get("pro_access"):
             st.success("Bạn đã có quyền truy cập Pro.")
