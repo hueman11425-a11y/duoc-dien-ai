@@ -10,13 +10,10 @@ from gspread_dataframe import get_as_dataframe
 from gspread.exceptions import SpreadsheetNotFound
 from Bio import Entrez
 import time
-# --- THƯ VIỆN MỚI CHO NÚT GẠT ---
-from streamlit_toggle_switch import st_toggle_switch
-# 15/08/2025 - Ép hệ thống build lại 
+# --- THƯ VIỆN MỚI CHO NÚT GẠT (THAY THẾ) ---
+from streamlit_antd_toggle import antd_toggle
+
 # --- CSS CHO GIAO DIỆN TỐI ---
-# Chúng ta định nghĩa các màu sắc cho giao diện tối bằng CSS.
-# Thay vì thay đổi từng thành phần, chúng ta ghi đè các biến màu gốc của Streamlit.
-# Cách này gọn gàng và hiệu quả hơn nhiều.
 DARK_THEME_CSS = """
 <style>
     :root {
@@ -189,18 +186,17 @@ def run_lookup(drug_name):
 st.set_page_config(page_title="Dược Điển AI", page_icon="💊")
 
 # --- MÃ MỚI: LOGIC CHUYỂN ĐỔI GIAO DIỆN ---
-# Thêm một vùng chứa ở đầu sidebar để đặt nút gạt
 with st.sidebar.container():
-    theme_toggle = st_toggle_switch(
-        label="Chế độ Tối",
-        key="theme_switch",
-        default_value=st.session_state.get("theme", True), # Lấy giá trị hiện tại hoặc mặc định là Tối
-        label_after=False,
+    # --- THAY THẾ HÀM GỌI NÚT GẠT ---
+    theme_toggle = antd_toggle(
+        key='theme_switch',
+        label='Chế độ Tối',
+        checked=st.session_state.get("theme", True),
+        size='small'
     )
     # Lưu trạng thái của nút gạt vào session state
     st.session_state.theme = theme_toggle
 
-# Nếu nút gạt đang BẬT (là True), thì áp dụng CSS Giao diện tối
 if st.session_state.theme:
     st.markdown(DARK_THEME_CSS, unsafe_allow_html=True)
 # --- KẾT THÚC MÃ MỚI ---
@@ -243,5 +239,3 @@ if lookup_button:
         st.warning("Vui lòng nhập tên thuốc trước khi tra cứu.")
     else:
         run_lookup(drug_name_input)
-
-
