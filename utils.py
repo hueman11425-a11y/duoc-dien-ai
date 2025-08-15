@@ -149,8 +149,8 @@ def load_user_history(db, user_info):
         history = db.child("user_data").child(user_id).child("history").get(token=token).val()
         return history if history else []
     except Exception as e:
-        st.error("Lỗi khi tải lịch sử tra cứu.")
-        st.exception(e)
+        # st.error("Lỗi khi tải lịch sử tra cứu.")
+        # st.exception(e)
         return []
 
 def save_drug_to_history(db, user_info, drug_name):
@@ -175,10 +175,9 @@ def load_user_collections(db, user_info):
         user_id = user_info['localId']
         token = user_info['idToken']
         collections = db.child("user_data").child(user_id).child("collections").get(token=token).val()
-        # Dữ liệu trả về sẽ là một dictionary, hoặc None nếu chưa có
         return collections if collections else {}
     except Exception as e:
-        st.error("Lỗi khi tải các bộ sưu tập.")
+        # st.error("Lỗi khi tải các bộ sưu tập.")
         return {}
 
 def add_drug_to_collection(db, user_info, collection_name, drug_name):
@@ -186,16 +185,14 @@ def add_drug_to_collection(db, user_info, collection_name, drug_name):
     try:
         user_id = user_info['localId']
         token = user_info['idToken']
-        # Lấy danh sách thuốc hiện tại trong bộ sưu tập
         drug_list = db.child("user_data").child(user_id).child("collections").child(collection_name).get(token=token).val()
-        if drug_list is None: # Nếu bộ sưu tập tồn tại nhưng rỗng
+        if drug_list is None:
             drug_list = []
-        # Thêm thuốc mới nếu chưa có
         if drug_name not in drug_list:
             drug_list.append(drug_name)
             db.child("user_data").child(user_id).child("collections").child(collection_name).set(drug_list, token=token)
-            return True # Báo hiệu thành công
-        return False # Báo hiệu thuốc đã tồn tại
+            return True
+        return False
     except Exception as e:
         st.warning(f"Lỗi khi thêm thuốc vào bộ sưu tập '{collection_name}'.")
         return False
@@ -207,11 +204,9 @@ def create_new_collection(db, user_info, collection_name):
     try:
         user_id = user_info['localId']
         token = user_info['idToken']
-        # Kiểm tra xem bộ sưu tập đã tồn tại chưa
         existing_collections = load_user_collections(db, user_info)
         if collection_name in existing_collections:
             return False, f"Bộ sưu tập '{collection_name}' đã tồn tại."
-        # Tạo bộ sưu tập mới với một danh sách rỗng
         db.child("user_data").child(user_id).child("collections").child(collection_name).set([], token=token)
         return True, f"Đã tạo thành công bộ sưu tập '{collection_name}'."
     except Exception as e:
