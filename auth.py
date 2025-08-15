@@ -38,8 +38,9 @@ def display_auth_forms(auth):
             st.success(f"Chào mừng, {user_email}")
             if st.button("Đăng xuất"):
                 st.session_state.user_info = None
-                st.session_state.history = [] # Xóa lịch sử tạm thời khi đăng xuất
-                st.session_state.pro_access = False # Reset quyền Pro
+                st.session_state.history = []
+                st.session_state.pro_access = False
+                st.session_state.history_loaded = False # Reset cờ báo đã tải lịch sử
                 st.rerun()
         else:
             choice = st.selectbox("Đăng nhập / Đăng ký", ["Tiếp tục với tư cách khách", "Đăng nhập", "Đăng ký"])
