@@ -149,8 +149,6 @@ def load_user_history(db, user_info):
         history = db.child("user_data").child(user_id).child("history").get(token=token).val()
         return history if history else []
     except Exception as e:
-        # st.error("Lỗi khi tải lịch sử tra cứu.")
-        # st.exception(e)
         return []
 
 def save_drug_to_history(db, user_info, drug_name):
@@ -177,7 +175,6 @@ def load_user_collections(db, user_info):
         collections = db.child("user_data").child(user_id).child("collections").get(token=token).val()
         return collections if collections else {}
     except Exception as e:
-        # st.error("Lỗi khi tải các bộ sưu tập.")
         return {}
 
 def add_drug_to_collection(db, user_info, collection_name, drug_name):
@@ -199,16 +196,30 @@ def add_drug_to_collection(db, user_info, collection_name, drug_name):
 
 def create_new_collection(db, user_info, collection_name):
     """Tạo một bộ sưu tập mới (rỗng)."""
+    print(f"--- DEBUG: Bắt đầu hàm create_new_collection với tên: '{collection_name}' ---") # Dòng debug
     if not collection_name or collection_name.isspace():
+        print("--- DEBUG: Tên bộ sưu tập rỗng, trả về False. ---") # Dòng debug
         return False, "Tên bộ sưu tập không được để trống."
     try:
         user_id = user_info['localId']
         token = user_info['idToken']
+        
+        print(f"--- DEBUG: Đang tải các bộ sưu tập hiện có cho user_id: {user_id} ---") # Dòng debug
         existing_collections = load_user_collections(db, user_info)
+        print(f"--- DEBUG: Các bộ sưu tập hiện có: {existing_collections} ---") # Dòng debug
+
         if collection_name in existing_collections:
+            print(f"--- DEBUG: Bộ sưu tập '{collection_name}' đã tồn tại, trả về False. ---") # Dòng debug
             return False, f"Bộ sưu tập '{collection_name}' đã tồn tại."
+        
+        path_to_write = f"user_data/{user_id}/collections/{collection_name}"
+        print(f"--- DEBUG: Sắp ghi dữ liệu [] vào đường dẫn: {path_to_write} ---") # Dòng debug
+        
         db.child("user_data").child(user_id).child("collections").child(collection_name).set([], token=token)
+        
+        print("--- DEBUG: Ghi dữ liệu thành công không có lỗi. Trả về True. ---") # Dòng debug
         return True, f"Đã tạo thành công bộ sưu tập '{collection_name}'."
     except Exception as e:
+        print(f"--- DEBUG: GẶP LỖI TRONG KHỐI TRY: {e} ---") # Dòng debug
         st.warning(f"Lỗi khi tạo bộ sưu tập '{collection_name}'.")
         return False, "Đã xảy ra lỗi không xác định."
