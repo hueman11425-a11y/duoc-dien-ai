@@ -10,8 +10,8 @@ from gspread_dataframe import get_as_dataframe
 from gspread.exceptions import SpreadsheetNotFound
 from Bio import Entrez
 import time
-# --- THƯ VIỆN MỚI CHO NÚT GẠT (THAY THẾ) ---
-from streamlit_antd_toggle import antd_toggle
+# --- THƯ VIỆN GỐC CHO NÚT GẠT ---
+from streamlit_toggle_switch import st_toggle_switch
 
 # --- CSS CHO GIAO DIỆN TỐI ---
 DARK_THEME_CSS = """
@@ -187,12 +187,11 @@ st.set_page_config(page_title="Dược Điển AI", page_icon="💊")
 
 # --- MÃ MỚI: LOGIC CHUYỂN ĐỔI GIAO DIỆN ---
 with st.sidebar.container():
-    # --- THAY THẾ HÀM GỌI NÚT GẠT ---
-    theme_toggle = antd_toggle(
-        key='theme_switch',
-        label='Chế độ Tối',
-        checked=st.session_state.get("theme", True),
-        size='small'
+    theme_toggle = st_toggle_switch(
+        label="Chế độ Tối",
+        key="theme_switch",
+        default_value=st.session_state.get("theme", True), # Lấy giá trị hiện tại hoặc mặc định là Tối
+        label_after=False,
     )
     # Lưu trạng thái của nút gạt vào session state
     st.session_state.theme = theme_toggle
