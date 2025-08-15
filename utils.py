@@ -140,7 +140,7 @@ def get_drug_info(drug_name, is_pro_user=False):
         
     return final_response
 
-# --- CÁC HÀM TƯƠNG TÁC FIREBASE MỚI ---
+# --- CÁC HÀM TƯƠNG TÁC FIREBASE (LỊCH SỬ) ---
 def load_user_history(db, user_info):
     """Tải lịch sử tra cứu của người dùng từ Firebase."""
     try:
@@ -150,7 +150,7 @@ def load_user_history(db, user_info):
         return history if history else []
     except Exception as e:
         st.error("Lỗi khi tải lịch sử tra cứu.")
-        st.exception(e) # DÒNG NÀY SẼ IN RA LỖI CHI TIẾT
+        st.exception(e)
         return []
 
 def save_drug_to_history(db, user_info, drug_name):
@@ -167,4 +167,53 @@ def save_drug_to_history(db, user_info, drug_name):
             db.child("user_data").child(user_id).child("history").set(current_history, token=token)
     except Exception as e:
         st.warning("Lỗi khi lưu lịch sử tra cứu.")
-        # st.exception(e) # Bỏ comment dòng này để debug nếu cần
+
+# --- CÁC HÀM TƯƠNG TÁC FIREBASE (BỘ SƯU TẬP) ---
+def load_user_collections(db, user_info):
+    """Tải toàn bộ bộ sưu tập của người dùng từ Firebase."""
+    try:
+        user_id = user_info['localId']
+        token = user_info['idToken']
+        collections = db.child("user_data").child(user_id).child("collections").get(token=token).val()
+        # Dữ liệu trả về sẽ là một dictionary, hoặc None nếu chưa có
+        return collections if collections else {}
+    except Exception as e:
+        st.error("Lỗi khi tải các bộ sưu tập.")
+        return {}
+
+def add_drug_to_collection(db, user_info, collection_name, drug_name):
+    """Thêm một thuốc vào một bộ sưu tập cụ thể."""
+    try:
+        user_id = user_info['localId']
+        token = user_info['idToken']
+        # Lấy danh sách thuốc hiện tại trong bộ sưu tập
+        drug_list = db.child("user_data").child(user_id).child("collections").child(collection_name).get(token=token).val()
+        if drug_list is None: # Nếu bộ sưu tập tồn tại nhưng rỗng
+            drug_list = []
+        # Thêm thuốc mới nếu chưa có
+        if drug_name not in drug_list:
+            drug_list.append(drug_name)
+            db.child("user_data").child(user_id).child("collections").child(collection_name).set(drug_list, token=token)
+            return True # Báo hiệu thành công
+        return False # Báo hiệu thuốc đã tồn tại
+    except Exception as e:
+        st.warning(f"Lỗi khi thêm thuốc vào bộ sưu tập '{collection_name}'.")
+        return False
+
+def create_new_collection(db, user_info, collection_name):
+    """Tạo một bộ sưu tập mới (rỗng)."""
+    if not collection_name or collection_name.isspace():
+        return False, "Tên bộ sưu tập không được để trống."
+    try:
+        user_id = user_info['localId']
+        token = user_info['idToken']
+        # Kiểm tra xem bộ sưu tập đã tồn tại chưa
+        existing_collections = load_user_collections(db, user_info)
+        if collection_name in existing_collections:
+            return False, f"Bộ sưu tập '{collection_name}' đã tồn tại."
+        # Tạo bộ sưu tập mới với một danh sách rỗng
+        db.child("user_data").child(user_id).child("collections").child(collection_name).set([], token=token)
+        return True, f"Đã tạo thành công bộ sưu tập '{collection_name}'."
+    except Exception as e:
+        st.warning(f"Lỗi khi tạo bộ sưu tập '{collection_name}'.")
+        return False, "Đã xảy ra lỗi không xác định."
