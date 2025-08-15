@@ -188,13 +188,12 @@ authenticator = stauth.Authenticate(
     config['cookie']['name'],
     config['cookie']['key'],
     config['cookie']['expiry_days'],
-    config['preauthorized']
+    # THAY ĐỔI Ở ĐÂY
+    config['pre_authorized'] 
 )
 
 # --- MÃ MỚI: HIỂN THỊ WIDGET ĐĂNG NHẬP / ĐĂNG KÝ ---
-# Chúng ta đặt form đăng nhập ở sidebar
 with st.sidebar:
-    # name, authentication_status, username = authenticator.login('main')
     name, authentication_status, username = authenticator.login()
     if st.session_state["authentication_status"]:
         st.write(f'Chào mừng *{st.session_state["name"]}*')
@@ -203,17 +202,7 @@ with st.sidebar:
         st.error('Tên đăng nhập/mật khẩu không chính xác')
     elif st.session_state["authentication_status"] is None:
         st.warning('Vui lòng nhập tên đăng nhập và mật khẩu')
-        # Thêm chức năng đăng ký (Tạm thời ẩn đi, bạn có thể mở lại sau)
-        # try:
-        #     if authenticator.register_user('Đăng ký tài khoản', preauthorization=False):
-        #         st.success('Đăng ký thành công. Vui lòng đăng nhập.')
-        #         # Cập nhật file config.yaml sau khi có người dùng mới
-        #         with open('config.yaml', 'w') as file:
-        #             yaml.dump(config, file, default_flow_style=False)
-        # except Exception as e:
-        #     st.error(e)
-
-
+        
 # --- BẮT ĐẦU CẤU TRÚC PHÂN LUỒNG ---
 st.title("Dược Điển AI 💊")
 st.caption("Dự án được phát triển bởi group CÂCK và AI")
