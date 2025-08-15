@@ -38,7 +38,6 @@ def get_pro_model():
 # --- CÁC HÀM XỬ LÝ GOOGLE SHEETS ---
 @st.cache_data(ttl=600)
 def get_access_codes_df():
-    # ... (Hàm này không thay đổi)
     try:
         credentials = st.secrets.connections.gsheets.credentials
         gspread_client = gspread.service_account_from_dict(credentials)
@@ -50,7 +49,6 @@ def get_access_codes_df():
         return pd.DataFrame()
 
 def verify_code(user_code):
-    # ... (Hàm này không thay đổi)
     if not user_code: return False, "Vui lòng nhập mã truy cập."
     codes_df = get_access_codes_df()
     if codes_df.empty: return False, "Không thể tải dữ liệu mã truy cập."
@@ -75,10 +73,9 @@ def verify_code(user_code):
         except Exception: return False, "Lỗi định dạng ngày tháng trong Google Sheet."
     return False, "Loại mã không xác định."
 
-# --- CÁC HÀM XỬ LÝ DỮ LIỆU & API (KHÔNG THAY ĐỔI) ---
+# --- CÁC HÀM XỬ LÝ DỮ LIỆU & API ---
 @st.cache_data(ttl=3600)
 def search_pubmed(drug_name):
-    # ... (Hàm này không thay đổi)
     Entrez.email = "duocdien.ai.project@example.com"
     api_key = st.secrets.get("api_keys", {}).get("pubmed")
     if api_key: Entrez.api_key = api_key
@@ -95,7 +92,6 @@ def search_pubmed(drug_name):
         handle = Entrez.efetch(db="pubmed", id=id_list, rettype="medline", retmode="text")
         records_text = handle.read()
         handle.close()
-        # ... (phần xử lý text không đổi)
         context = ""
         articles = records_text.strip().split("\n\n")
         for article_text in articles:
@@ -112,7 +108,6 @@ def search_pubmed(drug_name):
 
 @st.cache_data(ttl="6h")
 def get_drug_info_from_api(drug_name, is_pro_user=False):
-    # ... (Hàm này là hàm get_drug_info cũ, chỉ đổi tên và vai trò)
     identifier_model = get_regular_model()
     prompt_nhan_dien_final = PROMPT_NHAN_DIEN.format(drug_name=drug_name)
     response_nhan_dien = identifier_model.generate_content(prompt_nhan_dien_final)
@@ -133,7 +128,6 @@ def get_drug_info_from_api(drug_name, is_pro_user=False):
     final_response = f"✅ Hoạt chất đã nhận diện: **{hoat_chat_goc}**\n\n---\n\n{base_response_text}"
 
     if is_pro_user:
-        # ... (phần xử lý Pro không đổi)
         section_11_content = "\n\n---\n\n**11. Phân tích các Nghiên cứu Lâm sàng nổi bật (trong 2 năm gần đây):**\n"
         try:
             with st.spinner("Người dùng Pro: Đang truy vấn API của PubMed..."):
@@ -156,11 +150,13 @@ def load_user_data(db, user_info):
     try:
         user_id = user_info['localId']
         token = user_info['idToken']
-        data = db.child("user_data").child(user_id).get(token=token).val()
+        # Chỉ lấy về history và collections để tiết kiệm băng thông
+        data = db.child("user_data").child(user_id).shallow().get(token=token).val()
         if not data:
-            return [], {} # Lịch sử rỗng, bộ sưu tập rỗng
-        history = data.get("history", [])
-        collections = data.get("collections", {})
+            return [], {}
+        
+        history = db.child("user_data").child(user_id).child("history").get(token=token).val() or []
+        collections = db.child("user_data").child(user_id).child("collections").get(token=token).val() or {}
         return history, collections
     except Exception:
         return [], {}
@@ -175,41 +171,36 @@ def load_user_result(db, user_info, drug_name):
     except Exception:
         return None
 
+# --- HÀM ĐÃ SỬA LỖI ---
 def save_new_result(db, user_info, drug_name, result_text):
-    """Lưu một kết quả mới vào Firebase và quản lý giới hạn lịch sử."""
+    """Lưu một kết quả mới vào Firebase một cách an toàn, không ảnh hưởng đến collections."""
     try:
         user_id = user_info['localId']
         token = user_info['idToken']
         
-        # Lấy dữ liệu hiện tại
-        current_data = db.child("user_data").child(user_id).get(token=token).val() or {}
-        history = current_data.get("history", [])
-        results_cache = current_data.get("results_cache", {})
+        # Bước 1: Lấy danh sách lịch sử hiện tại
+        history = db.child("user_data").child(user_id).child("history").get(token=token).val() or []
 
-        # Thêm kết quả mới và cập nhật lịch sử
-        results_cache[drug_name] = result_text
+        # Bước 2: Ghi kết quả mới vào results_cache một cách độc lập
+        db.child("user_data").child(user_id).child("results_cache").child(drug_name).set(result_text, token=token)
+
+        # Bước 3: Cập nhật danh sách lịch sử (đưa mục mới lên đầu)
         if drug_name in history:
             history.remove(drug_name)
         history.insert(0, drug_name)
         
-        # Xử lý giới hạn 20 mục
-        drug_to_delete = None
+        # Bước 4: Xử lý giới hạn 20 mục
         if len(history) > HISTORY_LIMIT:
-            drug_to_delete = history.pop()
-            if drug_to_delete in results_cache:
-                del results_cache[drug_to_delete]
+            drug_to_delete = history.pop() # Lấy ra thuốc cũ nhất
+            # Xóa kết quả của thuốc cũ nhất khỏi results_cache một cách độc lập
+            db.child("user_data").child(user_id).child("results_cache").child(drug_to_delete).remove(token=token)
         
-        # Chuẩn bị dữ liệu để ghi lên Firebase
-        update_data = {
-            "history": history,
-            "results_cache": results_cache
-        }
-        db.child("user_data").child(user_id).update(update_data, token=token)
+        # Bước 5: Ghi lại toàn bộ danh sách lịch sử đã cập nhật
+        db.child("user_data").child(user_id).child("history").set(history, token=token)
 
-        # Trả về lịch sử đã cập nhật để làm mới giao diện
         return history
-    except Exception:
-        st.error("Lỗi khi lưu kết quả tra cứu.")
+    except Exception as e:
+        st.error(f"Lỗi khi lưu kết quả tra cứu: {e}")
         return None
 
 def create_new_collection(db, user_info, collection_name):
@@ -221,12 +212,12 @@ def create_new_collection(db, user_info, collection_name):
         token = user_info['idToken']
         collections = db.child("user_data").child(user_id).child("collections").get(token=token).val() or {}
         
-        if len(collections) >= COLLECTION_LIMIT:
+        if len(collections) >= COLLECTION_LIMIT and collection_name not in collections:
             return False, f"Đã đạt giới hạn {COLLECTION_LIMIT} bộ sưu tập."
         if collection_name in collections:
             return False, f"Bộ sưu tập '{collection_name}' đã tồn tại."
 
-        collections[collection_name] = [] # Tạo list rỗng
+        collections[collection_name] = []
         db.child("user_data").child(user_id).child("collections").set(collections, token=token)
         return True, f"Đã tạo thành công bộ sưu tập '{collection_name}'."
     except Exception:
