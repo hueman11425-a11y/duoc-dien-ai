@@ -33,16 +33,26 @@ if is_maintenance:
 # --- KHỞI TẠO TRẠNG THÁI PHIÊN ---
 if 'history' not in st.session_state: st.session_state.history = []
 if 'pro_access' not in st.session_state: st.session_state.pro_access = False
+if 'history_loaded' not in st.session_state: st.session_state.history_loaded = False
 
 # --- HÀM LOGIC TRUNG TÂM ---
 def run_lookup(drug_name):
     try:
         is_pro = st.session_state.get("pro_access", False)
         final_result = utils.get_drug_info(drug_name, is_pro_user=is_pro)
+        
         if not final_result.startswith("❌ Lỗi:"):
             st.markdown(final_result)
-            # Chỉ lưu vào lịch sử tạm thời nếu chưa đăng nhập
-            if st.session_state.get("user_info") is None:
+            user_info = st.session_state.get("user_info")
+            
+            if user_info: # Nếu người dùng đã đăng nhập
+                user_id = user_info['localId']
+                hoat_chat_da_nhan_dien = final_result.split("**")[1] # Lấy hoạt chất đã nhận diện
+                utils.save_drug_to_history(firebase_db, user_id, hoat_chat_da_nhan_dien)
+                # Tải lại lịch sử ngay trong session state để cập nhật sidebar
+                st.session_state.history = utils.load_user_history(firebase_db, user_id)
+
+            else: # Nếu là khách
                 if drug_name not in st.session_state.history:
                     st.session_state.history.insert(0, drug_name)
                     if len(st.session_state.history) > 10:
@@ -59,6 +69,12 @@ st.set_page_config(page_title="Dược Điển AI", page_icon="💊")
 # Hiển thị form đăng nhập và lấy trạng thái
 is_logged_in = auth.display_auth_forms(firebase_auth)
 
+# --- TẢI DỮ LIỆU NGƯỜI DÙNG KHI ĐĂNG NHẬP ---
+if is_logged_in and not st.session_state.history_loaded:
+    user_id = st.session_state.user_info['localId']
+    st.session_state.history = utils.load_user_history(firebase_db, user_id)
+    st.session_state.history_loaded = True
+
 # --- GIAO DIỆN CHÍNH ---
 st.title("Dược Điển AI 💊")
 st.caption("Dự án được phát triển bởi group CÂCK và AI")
@@ -72,7 +88,10 @@ with st.sidebar:
     else:
         for drug in st.session_state.history:
             if st.button(drug, key=f"history_{drug}", use_container_width=True):
-                run_lookup(drug)
+                # Khi bấm nút từ lịch sử, ta coi như tra cứu lại
+                st.session_state.main_input = drug 
+                # Không gọi run_lookup trực tiếp để tránh lưu lại lịch sử trùng lặp
+                # Thay vào đó, ta sẽ rerun và để logic tra cứu chính xử lý
 
     st.markdown("---")
     with st.container(border=True):
