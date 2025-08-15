@@ -81,7 +81,7 @@ if is_logged_in and not st.session_state.user_data_loaded:
 # --- GIAO DIỆN CHÍNH ---
 st.title("Dược Điển AI 💊")
 st.caption("Dự án được phát triển bởi group CÂCK và AI")
-st.text("Phiên bản code: 15/08/2025 - 18:02") # <- CON DẤU THỜI GIAN
+# st.text("Phiên bản code: 15/08/2025 - 18:02") # Tạm thời xóa con dấu thời gian
 
 # --- KHUNG NHẬP LIỆU CHÍNH ---
 drug_name_input = st.text_input("Nhập tên thuốc (biệt dược hoặc hoạt chất):", key="main_input")
@@ -132,18 +132,24 @@ with st.sidebar:
     # --- PHẦN BỘ SƯU TẬP TRÊN SIDEBAR ---
     if is_logged_in:
         st.header("Bộ sưu tập")
-        with st.form("new_collection_form", clear_on_submit=True):
-            new_collection_name = st.text_input("Tên bộ sưu tập mới:")
-            if st.form_submit_button("Tạo mới"):
-                print("--- DEBUG APP.PY: Nút 'Tạo mới' đã được nhấn. ---") # Dòng debug mới
-                user_info = st.session_state.user_info
-                success, message = utils.create_new_collection(firebase_db, user_info, new_collection_name)
-                if success:
-                    st.success(message)
-                    st.session_state.collections = utils.load_user_collections(firebase_db, user_info)
-                    st.rerun()
-                else:
-                    st.error(message)
+        
+        # --- THAY ĐỔI LOGIC: KHÔNG DÙNG FORM NỮA ---
+        new_collection_name = st.text_input("Tên bộ sưu tập mới:", key="new_collection_input")
+        if st.button("Tạo mới"):
+            print("--- DEBUG APP.PY: Nút 'Tạo mới' (bản không form) đã được nhấn. ---")
+            user_info = st.session_state.user_info
+            # Lấy tên từ session_state thay vì biến cục bộ
+            collection_name_to_create = st.session_state.new_collection_input
+            
+            success, message = utils.create_new_collection(firebase_db, user_info, collection_name_to_create)
+            if success:
+                st.success(message)
+                st.session_state.collections = utils.load_user_collections(firebase_db, user_info)
+                # Xóa chữ trong ô input sau khi tạo thành công
+                st.session_state.new_collection_input = ""
+                st.rerun()
+            else:
+                st.error(message)
 
         collections = st.session_state.get("collections", {})
         if not collections:
