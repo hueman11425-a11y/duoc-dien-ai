@@ -6,10 +6,13 @@ import auth
 import utils
 
 # --- KHỞI TẠO CÁC DỊCH VỤ ---
-# Khởi tạo Firebase Authentication
-firebase_auth = auth.initialize_firebase()
-if not firebase_auth:
+# Khởi tạo Firebase App và các dịch vụ con
+firebase_app = auth.initialize_firebase_app()
+if not firebase_app:
     st.stop() # Dừng ứng dụng nếu không kết nối được Firebase
+
+firebase_auth = firebase_app.auth()
+firebase_db = firebase_app.database() # Lấy đối tượng database để tương tác
 
 # Cấu hình Google AI
 try:
