@@ -1,9 +1,11 @@
 import streamlit as st
 import pyrebase
 
-def initialize_firebase():
+@st.cache_resource
+def initialize_firebase_app():
     """
-    Khởi tạo kết nối tới Firebase và trả về đối tượng auth.
+    Khởi tạo kết nối tới Firebase và trả về đối tượng app chính.
+    Việc sử dụng @st.cache_resource giúp giữ kết nối ổn định qua các lần rerun.
     """
     try:
         firebase_config = {
@@ -16,9 +18,10 @@ def initialize_firebase():
             "databaseURL": st.secrets.firebase.databaseURL
         }
         firebase = pyrebase.initialize_app(firebase_config)
-        return firebase.auth()
+        return firebase
     except Exception as e:
         st.error("Lỗi khi khởi tạo Firebase. Vui lòng kiểm tra file secrets.toml của bạn.")
+        st.exception(e)
         return None
 
 def display_auth_forms(auth):
