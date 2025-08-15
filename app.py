@@ -41,7 +41,7 @@ except (FileNotFoundError, KeyError):
 if 'user_data_loaded' not in st.session_state: st.session_state.user_data_loaded = False
 if "query_result" not in st.session_state: st.session_state.query_result = None
 if 'history' not in st.session_state: st.session_state.history = []
-if 'guest_cache' not in st.session_state: st.session_state.guest_cache = {}
+if 'guest_cache' not in st.session_state: st.session_state.guest_cache = {} # Bộ nhớ tạm cho khách
 
 # --- HÀM LOGIC TRUNG TÂM ---
 def run_lookup(drug_name):
@@ -137,39 +137,18 @@ with st.sidebar:
         if not st.session_state.history:
             st.info("Chưa có thuốc nào được tra cứu.")
         else:
+            # --- LOGIC SIDEBAR ĐÃ ĐƯỢC ĐƠN GIẢN HÓA ---
             for drug in st.session_state.history:
-                col1, col2 = st.columns([0.8, 0.2])
-                with col1:
-                    if st.button(drug, key=f"history_{drug}", use_container_width=True):
-                        if is_logged_in:
-                            run_lookup(drug)
-                        else:
-                            st.session_state.query_result = st.session_state.guest_cache.get(drug, "Không tìm thấy kết quả trong bộ nhớ tạm.")
-                with col2:
+                if st.button(drug, key=f"history_{drug}", use_container_width=True):
                     if is_logged_in:
-                        with st.popover("➕", use_container_width=True):
-                            collections = st.session_state.get("collections", {})
-                            if not collections:
-                                st.write("Chưa có bộ sưu tập.")
-                            else:
-                                for coll_name in collections.keys():
-                                    if st.button(f"Thêm vào '{coll_name}'", key=f"add_{drug}_to_{coll_name}"):
-                                        # --- THÊM LOG DEBUG Ở ĐÂY ---
-                                        print(f"--- DEBUG: History state BEFORE action: {st.session_state.history}")
-                                        user_info = st.session_state.user_info
-                                        message = utils.add_drug_to_collection(firebase_db, user_info, coll_name, drug)
-                                        st.toast(message)
-                                        history_new, collections_new = utils.load_user_data(firebase_db, user_info)
-                                        st.session_state.collections = collections_new
-                                        # Cập nhật lại history state để chắc chắn
-                                        st.session_state.history = history_new
-                                        print(f"--- DEBUG: History state AFTER action: {st.session_state.history}")
-                                        st.rerun()
+                        run_lookup(drug)
+                    else:
+                        st.session_state.query_result = st.session_state.guest_cache.get(drug, "Không tìm thấy kết quả trong bộ nhớ tạm.")
+
     st.markdown("---")
 
     # --- PHẦN BỘ SƯU TẬP ---
     if is_logged_in:
-        # ... (Toàn bộ phần code này không đổi và đã ổn định)
         st.header("Bộ sưu tập")
         def handle_create_collection():
             coll_name = st.session_state.new_collection_input
@@ -199,7 +178,6 @@ with st.sidebar:
         st.link_button("Gửi phản hồi ngay!", url="https://forms.gle/M44GDS4hJ7LpY7b98")
 
     if is_logged_in:
-        # ... (Phần code này không đổi)
         st.header("Truy cập Pro")
         if st.session_state.get("pro_access"):
             st.success("Bạn đã có quyền truy cập Pro.")
