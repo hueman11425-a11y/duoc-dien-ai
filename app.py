@@ -12,7 +12,7 @@ from Bio import Entrez
 import time
 # --- THƯ VIỆN MỚI CHO NÚT GẠT ---
 from streamlit_toggle_switch import st_toggle_switch
-# Force rebuild 
+# 15/08/2025 - Ép hệ thống build lại 
 # --- CSS CHO GIAO DIỆN TỐI ---
 # Chúng ta định nghĩa các màu sắc cho giao diện tối bằng CSS.
 # Thay vì thay đổi từng thành phần, chúng ta ghi đè các biến màu gốc của Streamlit.
@@ -243,4 +243,5 @@ if lookup_button:
         st.warning("Vui lòng nhập tên thuốc trước khi tra cứu.")
     else:
         run_lookup(drug_name_input)
+
 
