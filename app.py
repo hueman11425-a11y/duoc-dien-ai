@@ -81,7 +81,6 @@ if is_logged_in and not st.session_state.user_data_loaded:
 # --- GIAO DIỆN CHÍNH ---
 st.title("Dược Điển AI 💊")
 st.caption("Dự án được phát triển bởi group CÂCK và AI")
-# st.text("Phiên bản code: 15/08/2025 - 18:02") # Tạm thời xóa con dấu thời gian
 
 # --- KHUNG NHẬP LIỆU CHÍNH ---
 drug_name_input = st.text_input("Nhập tên thuốc (biệt dược hoặc hoạt chất):", key="main_input")
@@ -100,21 +99,26 @@ if is_logged_in and st.session_state.last_drug_searched:
     if not collections:
         st.info("Bạn chưa có bộ sưu tập nào. Hãy tạo ở thanh công cụ bên trái.")
     else:
+        # --- LOGIC CHO NÚT "THÊM THUỐC" DÙNG CALLBACK ---
+        def handle_add_drug_to_collection():
+            user_info = st.session_state.user_info
+            drug_to_add = st.session_state.last_drug_searched
+            # Lấy collection được chọn từ session_state
+            selected_collection = st.session_state.get("collection_selector")
+
+            if utils.add_drug_to_collection(firebase_db, user_info, selected_collection, drug_to_add):
+                st.success(f"Đã thêm '{drug_to_add}' vào '{selected_collection}'.")
+                st.session_state.collections = utils.load_user_collections(firebase_db, user_info)
+            else:
+                st.warning(f"'{drug_to_add}' đã có trong '{selected_collection}'.")
+
         col1, col2 = st.columns([2,1])
         with col1:
-            selected_collection = st.selectbox("Chọn bộ sưu tập:", options=list(collections.keys()))
+            st.selectbox("Chọn bộ sưu tập:", options=list(collections.keys()), key="collection_selector")
         with col2:
             st.write("") 
             st.write("")
-            if st.button("Thêm thuốc", use_container_width=True):
-                user_info = st.session_state.user_info
-                drug_to_add = st.session_state.last_drug_searched
-                if utils.add_drug_to_collection(firebase_db, user_info, selected_collection, drug_to_add):
-                    st.success(f"Đã thêm '{drug_to_add}' vào '{selected_collection}'.")
-                    st.session_state.collections = utils.load_user_collections(firebase_db, user_info)
-                    st.rerun() 
-                else:
-                    st.warning(f"'{drug_to_add}' đã có trong '{selected_collection}'.")
+            st.button("Thêm thuốc", on_click=handle_add_drug_to_collection, use_container_width=True)
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -133,23 +137,25 @@ with st.sidebar:
     if is_logged_in:
         st.header("Bộ sưu tập")
         
-        # --- THAY ĐỔI LOGIC: KHÔNG DÙNG FORM NỮA ---
-        new_collection_name = st.text_input("Tên bộ sưu tập mới:", key="new_collection_input")
-        if st.button("Tạo mới"):
-            print("--- DEBUG APP.PY: Nút 'Tạo mới' (bản không form) đã được nhấn. ---")
-            user_info = st.session_state.user_info
-            # Lấy tên từ session_state thay vì biến cục bộ
+        # --- LOGIC "TẠO MỚI" DÙNG CALLBACK ---
+        def handle_create_collection():
             collection_name_to_create = st.session_state.new_collection_input
-            
+            if not collection_name_to_create or collection_name_to_create.isspace():
+                st.error("Tên bộ sưu tập không được để trống.")
+                return
+
+            user_info = st.session_state.user_info
             success, message = utils.create_new_collection(firebase_db, user_info, collection_name_to_create)
             if success:
                 st.success(message)
                 st.session_state.collections = utils.load_user_collections(firebase_db, user_info)
-                # Xóa chữ trong ô input sau khi tạo thành công
+                # Xóa chữ trong ô input sau khi tạo thành công - an toàn trong callback
                 st.session_state.new_collection_input = ""
-                st.rerun()
             else:
                 st.error(message)
+
+        st.text_input("Tên bộ sưu tập mới:", key="new_collection_input")
+        st.button("Tạo mới", on_click=handle_create_collection)
 
         collections = st.session_state.get("collections", {})
         if not collections:
