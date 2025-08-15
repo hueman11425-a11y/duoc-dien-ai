@@ -55,7 +55,7 @@ def get_drug_info(drug_name: str, is_pro_user: bool = False) -> str:
         generation_config={"max_output_tokens": 8192, "temperature": 0.6}
     ).text
 
-    result = f"✅ Hoạt chất: **{hoat_chat_goc}**\n\n---\n\n{base_response}"
+    result = f"Hoạt chất: {hoat_chat_goc}\n{base_response}"
     if is_pro_user:
         pubmed_summary = search_pubmed(hoat_chat_goc)
         summary_response = config.models["pro"].generate_content(
