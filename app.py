@@ -1,34 +1,20 @@
 import streamlit as st
 import google.generativeai as genai
-import google.generativeai.types as genai_types
-import google.api_core.exceptions as ga_ex
-import datetime
 from datetime import date, timedelta
 import pandas as pd
 import gspread
 from gspread_dataframe import get_as_dataframe
-from gspread.exceptions import SpreadsheetNotFound
 from Bio import Entrez
 import time
-import pyrebase
 
-# --- CẤU HÌNH FIREBASE ---
-try:
-    firebase_config = {
-        "apiKey": st.secrets.firebase.apiKey,
-        "authDomain": st.secrets.firebase.authDomain,
-        "projectId": st.secrets.firebase.projectId,
-        "storageBucket": st.secrets.firebase.storageBucket,
-        "messagingSenderId": st.secrets.firebase.messagingSenderId,
-        "appId": st.secrets.firebase.appId,
-        "databaseURL": st.secrets.firebase.databaseURL
-    }
-    firebase = pyrebase.initialize_app(firebase_config)
-    auth = firebase.auth()
-    st.session_state.firebase_auth = auth
-except Exception as e:
-    st.error("Lỗi khi khởi tạo Firebase. Vui lòng kiểm tra file secrets.toml của bạn.")
-    st.stop()
+# Import các file chúng ta vừa tách
+import auth
+
+# --- KHỞI TẠO CÁC DỊCH VỤ ---
+# Khởi tạo Firebase Authentication
+firebase_auth = auth.initialize_firebase()
+if not firebase_auth:
+    st.stop() # Dừng ứng dụng nếu không kết nối được Firebase
 
 # --- CÁC HÀM PROMPT VÀ KHỞI TẠO ---
 def load_prompt(file_path):
@@ -60,9 +46,8 @@ if is_maintenance:
 # --- 1. KHỞI TẠO TRẠNG THÁI PHIÊN ---
 if 'history' not in st.session_state: st.session_state.history = []
 if 'pro_access' not in st.session_state: st.session_state.pro_access = False
-if 'user_info' not in st.session_state: st.session_state.user_info = None
 
-# --- 2. CÁC HÀM XỬ LÝ ---
+# --- 2. CÁC HÀM XỬ LÝ (Sẽ được chuyển đi sau) ---
 @st.cache_data(ttl=600)
 def get_access_codes_df():
     try:
@@ -199,51 +184,18 @@ def run_lookup(drug_name):
         st.error("💥 Lỗi không xác định.")
         st.exception(e)
 
-# --- GIAO DIỆN VÀ LOGIC CHÍNH ---
+# --- BẮT ĐẦU GIAO DIỆN ---
 st.set_page_config(page_title="Dược Điển AI", page_icon="💊")
+
+# Hiển thị form đăng nhập và lấy trạng thái
+is_logged_in = auth.display_auth_forms(firebase_auth)
+
+# --- GIAO DIỆN CHÍNH ---
 st.title("Dược Điển AI 💊")
 st.caption("Dự án được phát triển bởi group CÂCK và AI")
 
-auth = st.session_state.firebase_auth
-is_logged_in = st.session_state.get("user_info") is not None
-
-# --- SIDEBAR LOGIC ---
+# --- SIDEBAR (phần còn lại) ---
 with st.sidebar:
-    if is_logged_in:
-        user_email = st.session_state.user_info['email']
-        st.success(f"Chào mừng, {user_email}")
-        if st.button("Đăng xuất"):
-            st.session_state.user_info = None
-            st.session_state.history = [] # Xóa lịch sử tạm thời khi đăng xuất
-            st.session_state.pro_access = False # Reset quyền Pro
-            st.rerun()
-    else:
-        choice = st.selectbox("Đăng nhập / Đăng ký", ["Tiếp tục với tư cách khách", "Đăng nhập", "Đăng ký"])
-
-        if choice == "Đăng nhập":
-            with st.form("login_form"):
-                email = st.text_input("Email")
-                password = st.text_input("Mật khẩu", type="password")
-                login_button = st.form_submit_button("Đăng nhập")
-                if login_button:
-                    try:
-                        user = auth.sign_in_with_email_and_password(email, password)
-                        st.session_state.user_info = user
-                        st.rerun()
-                    except Exception as e:
-                        st.error("Email hoặc mật khẩu không chính xác.")
-        elif choice == "Đăng ký":
-            with st.form("register_form"):
-                email = st.text_input("Email")
-                password = st.text_input("Mật khẩu", type="password")
-                register_button = st.form_submit_button("Đăng ký")
-                if register_button:
-                    try:
-                        user = auth.create_user_with_email_and_password(email, password)
-                        st.sidebar.success("Đăng ký thành công! Vui lòng chuyển qua tab 'Đăng nhập'.")
-                    except Exception as e:
-                        st.sidebar.error("Email này có thể đã tồn tại hoặc không hợp lệ.")
-    
     # Lịch sử và phản hồi hiển thị cho tất cả mọi người
     st.header("Lịch sử tra cứu")
     if not st.session_state.history:
@@ -274,7 +226,7 @@ with st.sidebar:
                 else:
                     st.error(message)
 
-# --- GIAO DIỆN CHÍNH ---
+# --- KHUNG NHẬP LIỆU CHÍNH ---
 if not is_logged_in:
     st.info("Bạn đang sử dụng với tư cách khách. Đăng nhập để lưu lịch sử và sử dụng các tính năng nâng cao.")
 
