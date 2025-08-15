@@ -135,6 +135,7 @@ with st.sidebar:
         with st.form("new_collection_form", clear_on_submit=True):
             new_collection_name = st.text_input("Tên bộ sưu tập mới:")
             if st.form_submit_button("Tạo mới"):
+                print("--- DEBUG APP.PY: Nút 'Tạo mới' đã được nhấn. ---") # Dòng debug mới
                 user_info = st.session_state.user_info
                 success, message = utils.create_new_collection(firebase_db, user_info, new_collection_name)
                 if success:
