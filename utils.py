@@ -150,7 +150,7 @@ def load_user_history(db, user_info):
         return history if history else []
     except Exception as e:
         st.error("Lỗi khi tải lịch sử tra cứu.")
-        # st.exception(e) # Bỏ comment dòng này để debug nếu cần
+        st.exception(e) # DÒNG NÀY SẼ IN RA LỖI CHI TIẾT
         return []
 
 def save_drug_to_history(db, user_info, drug_name):
