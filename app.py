@@ -81,6 +81,7 @@ if is_logged_in and not st.session_state.user_data_loaded:
 # --- GIAO DIỆN CHÍNH ---
 st.title("Dược Điển AI 💊")
 st.caption("Dự án được phát triển bởi group CÂCK và AI")
+st.text("Phiên bản code: 15/08/2025 - 18:02") # <- CON DẤU THỜI GIAN
 
 # --- KHUNG NHẬP LIỆU CHÍNH ---
 drug_name_input = st.text_input("Nhập tên thuốc (biệt dược hoặc hoạt chất):", key="main_input")
