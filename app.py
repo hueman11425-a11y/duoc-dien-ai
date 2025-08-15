@@ -46,11 +46,10 @@ def run_lookup(drug_name):
             user_info = st.session_state.get("user_info")
             
             if user_info: # Nếu người dùng đã đăng nhập
-                user_id = user_info['localId']
                 hoat_chat_da_nhan_dien = final_result.split("**")[1] # Lấy hoạt chất đã nhận diện
-                utils.save_drug_to_history(firebase_db, user_id, hoat_chat_da_nhan_dien)
+                utils.save_drug_to_history(firebase_db, user_info, hoat_chat_da_nhan_dien)
                 # Tải lại lịch sử ngay trong session state để cập nhật sidebar
-                st.session_state.history = utils.load_user_history(firebase_db, user_id)
+                st.session_state.history = utils.load_user_history(firebase_db, user_info)
 
             else: # Nếu là khách
                 if drug_name not in st.session_state.history:
@@ -71,8 +70,8 @@ is_logged_in = auth.display_auth_forms(firebase_auth)
 
 # --- TẢI DỮ LIỆU NGƯỜI DÙNG KHI ĐĂNG NHẬP ---
 if is_logged_in and not st.session_state.history_loaded:
-    user_id = st.session_state.user_info['localId']
-    st.session_state.history = utils.load_user_history(firebase_db, user_id)
+    user_info = st.session_state.user_info
+    st.session_state.history = utils.load_user_history(firebase_db, user_info)
     st.session_state.history_loaded = True
 
 # --- GIAO DIỆN CHÍNH ---
