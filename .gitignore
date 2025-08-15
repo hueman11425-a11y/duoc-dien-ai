@@ -1,0 +1,45 @@
+# Python cache and artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+env/
+.venv/
+.env/
+
+# Streamlit secrets and config
+/.streamlit/secrets.toml
+/.streamlit/*.json
+/.streamlit/config.toml
+/.streamlit/logs/
+
+# IDE/editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Runtime (người viết có file runtime.txt)
+runtime.txt
+
+# Dependency files
+*.egg-info/
+dist/
+build/
+
+# Optional: pipenv, poetry
+Pipfile.lock
+poetry.lock
+
+# Jupyter notebooks checkpoints (nếu dùng)
+.ipynb_checkpoints/
