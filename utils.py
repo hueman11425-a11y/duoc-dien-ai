@@ -141,26 +141,30 @@ def get_drug_info(drug_name, is_pro_user=False):
     return final_response
 
 # --- CÁC HÀM TƯƠNG TÁC FIREBASE MỚI ---
-def load_user_history(db, user_id):
+def load_user_history(db, user_info):
     """Tải lịch sử tra cứu của người dùng từ Firebase."""
     try:
-        history = db.child("user_data").child(user_id).child("history").get().val()
-        # Firebase trả về None nếu không có dữ liệu, ta chuyển thành list rỗng
+        user_id = user_info['localId']
+        token = user_info['idToken']
+        history = db.child("user_data").child(user_id).child("history").get(token=token).val()
         return history if history else []
     except Exception as e:
         st.error("Lỗi khi tải lịch sử tra cứu.")
+        # st.exception(e) # Bỏ comment dòng này để debug nếu cần
         return []
 
-def save_drug_to_history(db, user_id, drug_name):
+def save_drug_to_history(db, user_info, drug_name):
     """Lưu một thuốc vào lịch sử tra cứu của người dùng trên Firebase."""
     try:
-        current_history = load_user_history(db, user_id)
-        # Thêm vào đầu danh sách nếu chưa tồn tại để hiển thị mục mới nhất lên trên
+        user_id = user_info['localId']
+        token = user_info['idToken']
+        current_history = load_user_history(db, user_info)
+        
         if drug_name not in current_history:
             current_history.insert(0, drug_name)
-            # Giới hạn lịch sử lưu 20 mục gần nhất
             if len(current_history) > 20:
                 current_history = current_history[:20]
-            db.child("user_data").child(user_id).child("history").set(current_history)
+            db.child("user_data").child(user_id).child("history").set(current_history, token=token)
     except Exception as e:
         st.warning("Lỗi khi lưu lịch sử tra cứu.")
+        # st.exception(e) # Bỏ comment dòng này để debug nếu cần
