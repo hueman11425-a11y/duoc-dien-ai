@@ -187,9 +187,8 @@ authenticator = stauth.Authenticate(
     config['credentials'],
     config['cookie']['name'],
     config['cookie']['key'],
-    config['cookie']['expiry_days'],
-    # THAY ĐỔI Ở ĐÂY
-    config['pre_authorized'] 
+    config['cookie']['expiry_days']
+    # THAM SỐ 'pre_authorized' ĐÃ BỊ XÓA
 )
 
 # --- MÃ MỚI: HIỂN THỊ WIDGET ĐĂNG NHẬP / ĐĂNG KÝ ---
