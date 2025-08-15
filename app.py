@@ -99,7 +99,6 @@ if is_logged_in and st.session_state.last_drug_searched:
     if not collections:
         st.info("Bạn chưa có bộ sưu tập nào. Hãy tạo ở thanh công cụ bên trái.")
     else:
-        # --- LOGIC CHO NÚT "THÊM THUỐC" DÙNG CALLBACK ---
         def handle_add_drug_to_collection():
             user_info = st.session_state.user_info
             drug_to_add = st.session_state.last_drug_searched
@@ -107,7 +106,6 @@ if is_logged_in and st.session_state.last_drug_searched:
 
             if utils.add_drug_to_collection(firebase_db, user_info, selected_collection, drug_to_add):
                 st.success(f"Đã thêm '{drug_to_add}' vào '{selected_collection}'.")
-                # CẬP NHẬT TRỰC TIẾP SESSION STATE
                 if drug_to_add not in st.session_state.collections[selected_collection]:
                     st.session_state.collections[selected_collection].append(drug_to_add)
             else:
@@ -124,13 +122,22 @@ if is_logged_in and st.session_state.last_drug_searched:
 # --- SIDEBAR ---
 with st.sidebar:
     st.header("Lịch sử tra cứu")
+
+    # --- SỬA LỖI: DÙNG CALLBACK CHO CÁC NÚT LỊCH SỬ ---
+    def handle_history_click(drug_name):
+        st.session_state.main_input = drug_name
+
     if not st.session_state.history:
         st.info("Chưa có thuốc nào được tra cứu.")
     else:
         for drug in st.session_state.history:
-            if st.button(drug, key=f"history_{drug}", use_container_width=True):
-                st.session_state.main_input = drug
-                st.rerun()
+            st.button(
+                drug, 
+                key=f"history_{drug}", 
+                on_click=handle_history_click, 
+                args=(drug,), 
+                use_container_width=True
+            )
 
     st.markdown("---")
 
@@ -138,7 +145,6 @@ with st.sidebar:
     if is_logged_in:
         st.header("Bộ sưu tập")
         
-        # --- LOGIC "TẠO MỚI" DÙNG CALLBACK ---
         def handle_create_collection():
             collection_name_to_create = st.session_state.new_collection_input
             if not collection_name_to_create or collection_name_to_create.isspace():
@@ -149,9 +155,7 @@ with st.sidebar:
             success, message = utils.create_new_collection(firebase_db, user_info, collection_name_to_create)
             if success:
                 st.success(message)
-                # CẬP NHẬT TRỰC TIẾP SESSION STATE
                 st.session_state.collections[collection_name_to_create] = []
-                # Xóa chữ trong ô input sau khi tạo thành công
                 st.session_state.new_collection_input = ""
             else:
                 st.error(message)
@@ -163,15 +167,23 @@ with st.sidebar:
         if not collections:
             st.info("Chưa có bộ sưu tập nào.")
         else:
+            # --- SỬA LỖI: DÙNG CALLBACK CHO CÁC NÚT TRONG BỘ SƯU TẬP ---
+            def handle_collection_drug_click(drug_name):
+                st.session_state.main_input = drug_name
+            
             for name, drugs in collections.items():
                 with st.expander(f"{name} ({len(drugs)} thuốc)"):
                     if not drugs:
                         st.write("Bộ sưu tập này trống.")
                     else:
                         for drug in drugs:
-                            if st.button(drug, key=f"collection_{name}_{drug}", use_container_width=True):
-                                st.session_state.main_input = drug
-                                st.rerun()
+                            st.button(
+                                drug, 
+                                key=f"collection_{name}_{drug}", 
+                                on_click=handle_collection_drug_click, 
+                                args=(drug,), 
+                                use_container_width=True
+                            )
         st.markdown("---")
 
     with st.container(border=True):
