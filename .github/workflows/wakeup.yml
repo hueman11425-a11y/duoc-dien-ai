@@ -2,8 +2,8 @@ name: Wake Up Streamlit App
 
 on:
   schedule:
-    # Chạy mỗi 1 phút một lần
-    - cron: '*/1 * * * *'
+    # Chạy mỗi 30 phút một lần
+    - cron: '*/30 * * * *'
 
 jobs:
   wake_up:
