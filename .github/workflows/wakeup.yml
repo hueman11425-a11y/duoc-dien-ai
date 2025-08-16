@@ -11,4 +11,4 @@ jobs:
     steps:
       - name: Gửi yêu cầu GET đến ứng dụng Streamlit và chờ
         run: |
-          curl --fail "https://duoc-dien-ai-laz8nqrjyz4arbpqum6nxv.streamlit.app/" || exit 0
+          curl -L --fail "https://duoc-dien-ai-laz8nqrjyz4arbpqum6nxv.streamlit.app" || exit 0
