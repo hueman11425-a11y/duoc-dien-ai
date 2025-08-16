@@ -2,13 +2,16 @@ name: Wake Up Streamlit App
 
 on:
   schedule:
-    # Chạy mỗi 1 phút để cho app có nhiều thời gian khởi động hơn
-    - cron: '*/1 * * * *'
+    # Chạy tự động mỗi 30 phút một lần
+    - cron: '*/30 * * * *'
+
+  workflow_dispatch:
+    # Dòng này cho phép bạn chạy tác vụ thủ công từ tab Actions
 
 jobs:
   wake_up:
     runs-on: ubuntu-latest
     steps:
-      - name: Send GET request to Streamlit app
+      - name: Gửi yêu cầu GET đến ứng dụng Streamlit và chờ
         run: |
           curl --fail "https://duoc-dien-ai-laz8nqrjyz4arbpqum6nxv.streamlit.app/" || exit 0
