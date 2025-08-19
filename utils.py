@@ -6,11 +6,13 @@ import gspread
 from gspread_dataframe import get_as_dataframe
 from Bio import Entrez
 import time
+import json
 
 # --- HẰNG SỐ GIỚI HẠN ---
-HISTORY_LIMIT = 20
+HISTORY_LIMIT = 40
 COLLECTION_LIMIT = 5
 DRUGS_PER_COLLECTION_LIMIT = 7
+PRESCRIPTION_LIMIT_PER_DAY = 5
 
 # --- CÁC HÀM PROMPT VÀ KHỞI TẠO MODEL ---
 def load_prompt(file_path):
@@ -24,18 +26,26 @@ PROMPT_NHAN_DIEN = load_prompt("prompt_nhandien.txt")
 PROMPT_REGULAR = load_prompt("prompt_regular.txt")
 PROMPT_PRO = load_prompt("prompt_pro.txt")
 PROMPT_SUMMARY = load_prompt("prompt_summary.txt")
+PROMPT_PRESCRIPTION = load_prompt("prompt_prescription.txt")
+PROMPT_QUIZ = load_prompt("prompt_quiz.txt")
+
+# Cài đặt an toàn để giảm thiểu việc bị chặn
+SAFETY_SETTINGS = {
+    'HATE_SPEECH': 'BLOCK_NONE',
+    'HARASSMENT': 'BLOCK_NONE',
+    'SEXUALLY_EXPLICIT': 'BLOCK_NONE',
+    'DANGEROUS_CONTENT': 'BLOCK_NONE',
+}
 
 @st.cache_resource
-def get_regular_model():
-    model_name = st.secrets.get("models", {}).get("regular", "gemini-1.5-flash-latest")
-    return genai.GenerativeModel(model_name)
+def get_model(model_key="lookup"):
+    """Lấy model từ secrets dựa trên key được cung cấp."""
+    default_model_name = st.secrets.get("models", {}).get("lookup", "gemini-1.5-flash-latest")
+    model_name = st.secrets.get("models", {}).get(model_key, default_model_name)
+    return genai.GenerativeModel(model_name, safety_settings=SAFETY_SETTINGS)
 
-@st.cache_resource
-def get_pro_model():
-    model_name = st.secrets.get("models", {}).get("pro", "gemini-pro")
-    return genai.GenerativeModel(model_name)
-
-# --- CÁC HÀM XỬ LÝ GOOGLE SHEETS ---
+# --- CÁC HÀM XỬ LÝ (Giữ nguyên) ---
+# ... (Toàn bộ các hàm từ get_access_codes_df đến get_prescription_analysis giữ nguyên)
 @st.cache_data(ttl=600)
 def get_access_codes_df():
     try:
@@ -47,33 +57,32 @@ def get_access_codes_df():
     except Exception as e:
         st.error(f"Lỗi kết nối tới Google Sheets.")
         return pd.DataFrame()
-
-def verify_code(user_code):
-    if not user_code: return False, "Vui lòng nhập mã truy cập."
+def verify_code(db, user_info, user_code):
+    if not user_code:
+        return False, "Vui lòng nhập mã truy cập."
+    user_id = user_info['localId']
+    token = user_info['idToken']
     codes_df = get_access_codes_df()
-    if codes_df.empty: return False, "Không thể tải dữ liệu mã truy cập."
+    if codes_df.empty:
+        return False, "Không thể tải dữ liệu mã truy cập."
     codes_df.dropna(subset=['code'], inplace=True)
     codes_df['code'] = codes_df['code'].astype(str)
-    matched_code_series = codes_df[codes_df['code'] == user_code]
-    if matched_code_series.empty: return False, "Mã không hợp lệ hoặc không tìm thấy."
-    code_info = matched_code_series.iloc[0]
-    code_type = code_info['type']
-    if code_type == 'permanent':
+    if user_code not in codes_df['code'].values:
+        return False, "Mã không hợp lệ hoặc không tìm thấy."
+    claimed_codes = db.child("claimed_pro_codes").get(token=token).val() or {}
+    if user_code in claimed_codes:
+        if claimed_codes[user_code] != user_id:
+            return False, "Mã này đã được sử dụng bởi một tài khoản khác."
+        else:
+            st.session_state.pro_access = True
+            return True, "Bạn đã kích hoạt mã này trước đó. Chào mừng trở lại!"
+    try:
+        db.child("claimed_pro_codes").child(user_code).set(user_id, token=token)
+        db.child("user_data").child(user_id).child("is_pro").set(True, token=token)
         st.session_state.pro_access = True
-        return True, f"Xác thực thành công! Chào mừng {code_info.get('owner', 'Pro User')}."
-    if code_type == 'temporary':
-        try:
-            created_date = pd.to_datetime(code_info['created_at']).date()
-            today = date.today()
-            days_passed = (today - created_date).days
-            if 0 <= days_passed <= 7:
-                st.session_state.pro_access = True
-                return True, f"Xác thực thành công! Mã còn hiệu lực {7 - days_passed} ngày."
-            else: return False, "Mã tạm thời đã hết hạn."
-        except Exception: return False, "Lỗi định dạng ngày tháng trong Google Sheet."
-    return False, "Loại mã không xác định."
-
-# --- CÁC HÀM XỬ LÝ DỮ LIỆU & API ---
+        return True, "Kích hoạt PRO thành công! Cảm ơn bạn đã ủng hộ dự án."
+    except Exception as e:
+        return False, f"Đã xảy ra lỗi trong quá trình kích hoạt: {e}"
 @st.cache_data(ttl=3600)
 def search_pubmed(drug_name):
     Entrez.email = "duocdien.ai.project@example.com"
@@ -105,10 +114,8 @@ def search_pubmed(drug_name):
         return context
     except Exception as e:
         return f"Đã xảy ra lỗi khi truy vấn API của PubMed: {e}"
-
-@st.cache_data(ttl="6h")
 def get_drug_info_from_api(drug_name, is_pro_user=False):
-    identifier_model = get_regular_model()
+    identifier_model = get_model("lookup")
     prompt_nhan_dien_final = PROMPT_NHAN_DIEN.format(drug_name=drug_name)
     response_nhan_dien = identifier_model.generate_content(prompt_nhan_dien_final)
     response_text = response_nhan_dien.text
@@ -118,51 +125,43 @@ def get_drug_info_from_api(drug_name, is_pro_user=False):
         hoat_chat_goc = response_text.strip()
     if hoat_chat_goc == "INVALID" or not hoat_chat_goc:
         return f"❌ Lỗi: '{drug_name}' không được nhận dạng.", None
-
-    analysis_model = get_pro_model() if is_pro_user else get_regular_model()
-    analysis_prompt = PROMPT_PRO if is_pro_user else PROMPT_REGULAR
+    analysis_model = get_model("lookup")
+    analysis_prompt = PROMPT_REGULAR
     generation_config = {"max_output_tokens": 8192, "temperature": 0.6}
     full_prompt = f"{analysis_prompt}\n\nHãy tra cứu và trình bày thông tin cho thuốc sau đây: **{hoat_chat_goc}**"
     response_phan_tich = analysis_model.generate_content(full_prompt, generation_config=generation_config)
     base_response_text = response_phan_tich.text
     final_response = f"✅ Hoạt chất đã nhận diện: **{hoat_chat_goc}**\n\n---\n\n{base_response_text}"
-
     if is_pro_user:
         section_11_content = "\n\n---\n\n**11. Phân tích các Nghiên cứu Lâm sàng nổi bật (trong 2 năm gần đây):**\n"
         try:
             with st.spinner("Người dùng Pro: Đang truy vấn API của PubMed..."):
                 search_context = search_pubmed(hoat_chat_goc)
                 summary_prompt_final = PROMPT_SUMMARY.format(drug_name=hoat_chat_goc, search_results=search_context)
-                summary_model = get_pro_model()
+                summary_model = get_model("lookup")
                 summary_response = summary_model.generate_content(summary_prompt_final, generation_config=generation_config)
                 section_11_content += summary_response.text
         except Exception as e:
             st.warning(f"Lỗi khi xử lý thông tin từ PubMed: {e}")
             section_11_content += "Đã xảy ra lỗi khi cố gắng tóm tắt dữ liệu từ PubMed."
         final_response += section_11_content
-        
     return final_response, hoat_chat_goc
-
-# --- CÁC HÀM TƯƠNG TÁC FIREBASE (ĐÃ VIẾT LẠI HOÀN TOÀN) ---
-
 def load_user_data(db, user_info):
-    """Tải dữ liệu cơ bản (lịch sử và bộ sưu tập) của người dùng."""
     try:
         user_id = user_info['localId']
         token = user_info['idToken']
-        # Chỉ lấy về history và collections để tiết kiệm băng thông
-        data = db.child("user_data").child(user_id).shallow().get(token=token).val()
+        data = db.child("user_data").child(user_id).get(token=token).val()
         if not data:
-            return [], {}
-        
-        history = db.child("user_data").child(user_id).child("history").get(token=token).val() or []
-        collections = db.child("user_data").child(user_id).child("collections").get(token=token).val() or {}
+            return [], {}, False
+        history = data.get("history", [])
+        collections = data.get("collections", {})
+        is_pro = data.get("is_pro", False)
+        if is_pro:
+            st.session_state.pro_access = True
         return history, collections
     except Exception:
         return [], {}
-
 def load_user_result(db, user_info, drug_name):
-    """Tải một kết quả tra cứu đã lưu từ Firebase."""
     try:
         user_id = user_info['localId']
         token = user_info['idToken']
@@ -170,79 +169,172 @@ def load_user_result(db, user_info, drug_name):
         return result
     except Exception:
         return None
-
-# --- HÀM ĐÃ SỬA LỖI ---
 def save_new_result(db, user_info, drug_name, result_text):
-    """Lưu một kết quả mới vào Firebase một cách an toàn, không ảnh hưởng đến collections."""
     try:
         user_id = user_info['localId']
         token = user_info['idToken']
-        
-        # Bước 1: Lấy danh sách lịch sử hiện tại
-        history = db.child("user_data").child(user_id).child("history").get(token=token).val() or []
-
-        # Bước 2: Ghi kết quả mới vào results_cache một cách độc lập
+        is_pro = db.child("user_data").child(user_id).child("is_pro").get(token=token).val() or False
         db.child("user_data").child(user_id).child("results_cache").child(drug_name).set(result_text, token=token)
-
-        # Bước 3: Cập nhật danh sách lịch sử (đưa mục mới lên đầu)
+        history = db.child("user_data").child(user_id).child("history").get(token=token).val() or []
         if drug_name in history:
             history.remove(drug_name)
         history.insert(0, drug_name)
-        
-        # Bước 4: Xử lý giới hạn 20 mục
-        if len(history) > HISTORY_LIMIT:
-            drug_to_delete = history.pop() # Lấy ra thuốc cũ nhất
-            # Xóa kết quả của thuốc cũ nhất khỏi results_cache một cách độc lập
+        if not is_pro and len(history) > HISTORY_LIMIT:
+            drug_to_delete = history.pop()
             db.child("user_data").child(user_id).child("results_cache").child(drug_to_delete).remove(token=token)
-        
-        # Bước 5: Ghi lại toàn bộ danh sách lịch sử đã cập nhật
         db.child("user_data").child(user_id).child("history").set(history, token=token)
-
         return history
     except Exception as e:
         st.error(f"Lỗi khi lưu kết quả tra cứu: {e}")
         return None
-
 def create_new_collection(db, user_info, collection_name):
-    """Tạo bộ sưu tập mới và kiểm tra giới hạn."""
     if not collection_name or collection_name.isspace():
         return False, "Tên bộ sưu tập không được để trống."
     try:
         user_id = user_info['localId']
         token = user_info['idToken']
+        is_pro = db.child("user_data").child(user_id).child("is_pro").get(token=token).val() or False
         collections = db.child("user_data").child(user_id).child("collections").get(token=token).val() or {}
-        
-        if len(collections) >= COLLECTION_LIMIT and collection_name not in collections:
+        if not is_pro and len(collections) >= COLLECTION_LIMIT and collection_name not in collections:
             return False, f"Đã đạt giới hạn {COLLECTION_LIMIT} bộ sưu tập."
         if collection_name in collections:
             return False, f"Bộ sưu tập '{collection_name}' đã tồn tại."
-
-        collections[collection_name] = []
+        collections[collection_name] = True
         db.child("user_data").child(user_id).child("collections").set(collections, token=token)
         return True, f"Đã tạo thành công bộ sưu tập '{collection_name}'."
-    except Exception:
-        return False, "Đã xảy ra lỗi không xác định."
-
+    except Exception as e:
+        return False, f"Đã xảy ra lỗi không xác định: {e}"
 def add_drug_to_collection(db, user_info, collection_name, drug_name):
-    """Thêm thuốc vào bộ sưu tập và kiểm tra giới hạn."""
     try:
         user_id = user_info['localId']
         token = user_info['idToken']
+        is_pro = db.child("user_data").child(user_id).child("is_pro").get(token=token).val() or False
         collections = db.child("user_data").child(user_id).child("collections").get(token=token).val() or {}
-        
         if collection_name not in collections:
             return f"Lỗi: Không tìm thấy bộ sưu tập '{collection_name}'."
-        
-        drug_list = collections.get(collection_name, [])
+        drug_list_or_placeholder = collections.get(collection_name)
+        if drug_list_or_placeholder is True:
+            drug_list = []
+        elif isinstance(drug_list_or_placeholder, list):
+            drug_list = drug_list_or_placeholder
+        else:
+            return "Lỗi: Cấu trúc dữ liệu của bộ sưu tập không hợp lệ."
         if drug_name in drug_list:
             return f"'{drug_name}' đã có trong bộ sưu tập này."
-
-        if len(drug_list) >= DRUGS_PER_COLLECTION_LIMIT:
+        if not is_pro and len(drug_list) >= DRUGS_PER_COLLECTION_LIMIT:
             return f"Bộ sưu tập '{collection_name}' đã đầy (tối đa {DRUGS_PER_COLLECTION_LIMIT} thuốc)."
-
         drug_list.append(drug_name)
         collections[collection_name] = drug_list
         db.child("user_data").child(user_id).child("collections").set(collections, token=token)
         return f"Đã thêm '{drug_name}' vào '{collection_name}'."
-    except Exception:
-        return "Đã xảy ra lỗi không xác định."
+    except Exception as e:
+        return f"Đã xảy ra lỗi không xác định: {e}"
+def delete_from_history(db, user_info, drug_name):
+    try:
+        user_id = user_info['localId']
+        token = user_info['idToken']
+        history = db.child("user_data").child(user_id).child("history").get(token=token).val() or []
+        if drug_name in history:
+            history.remove(drug_name)
+            db.child("user_data").child(user_id).child("history").set(history, token=token)
+        return True, f"Đã xóa '{drug_name}' khỏi lịch sử."
+    except Exception as e:
+        return False, f"Lỗi khi xóa khỏi lịch sử: {e}"
+def delete_from_collection(db, user_info, collection_name, drug_name):
+    try:
+        user_id = user_info['localId']
+        token = user_info['idToken']
+        collections = db.child("user_data").child(user_id).child("collections").get(token=token).val() or {}
+        if collection_name in collections and isinstance(collections[collection_name], list):
+            drug_list = collections[collection_name]
+            if drug_name in drug_list:
+                drug_list.remove(drug_name)
+                if not drug_list:
+                    collections[collection_name] = True
+                else:
+                    collections[collection_name] = drug_list
+                db.child("user_data").child(user_id).child("collections").set(collections, token=token)
+                return True, f"Đã xóa '{drug_name}' khỏi '{collection_name}'."
+        return False, "Không tìm thấy thuốc hoặc bộ sưu tập."
+    except Exception as e:
+        return False, f"Lỗi khi xóa khỏi bộ sưu tập: {e}"
+def delete_collection(db, user_info, collection_name):
+    try:
+        user_id = user_info['localId']
+        token = user_info['idToken']
+        db.child("user_data").child(user_id).child("collections").child(collection_name).remove(token=token)
+        return True, f"Đã xóa bộ sưu tập '{collection_name}'."
+    except Exception as e:
+        return False, f"Lỗi khi xóa bộ sưu tập: {e}"
+def get_prescription_analysis(db, user_info, patient_context, prescription_text):
+    try:
+        user_id = user_info['localId']
+        token = user_info['idToken']
+        is_pro = st.session_state.get("pro_access", False)
+        if not is_pro:
+            today_str = date.today().isoformat()
+            usage_ref = db.child("user_data").child(user_id).child("usage_counters").child("prescription_analysis")
+            usage_data = usage_ref.get(token=token).val() or {"count": 0, "last_updated": ""}
+            if usage_data.get("last_updated") != today_str:
+                usage_data = {"count": 0, "last_updated": today_str}
+            if usage_data.get("count", 0) >= PRESCRIPTION_LIMIT_PER_DAY:
+                remaining = PRESCRIPTION_LIMIT_PER_DAY - usage_data.get("count", 0)
+                return f"❌ Bạn đã hết {PRESCRIPTION_LIMIT_PER_DAY} lượt phân tích miễn phí trong ngày hôm nay."
+        model = get_model("prescription")
+        prompt = PROMPT_PRESCRIPTION.format(patient_context=patient_context, prescription_text=prescription_text)
+        response = model.generate_content(prompt)
+        if not is_pro:
+            usage_data["count"] += 1
+            usage_ref.set(usage_data, token=token)
+        return response.text
+    except Exception as e:
+        return f" Lỗi trong quá trình phân tích: {e}"
+
+def generate_quiz_from_file(uploaded_file, num_questions, focus_topic):
+    response = None # Khởi tạo biến response
+    try:
+        model = get_model("prescription") 
+        
+        # API mới không cần upload_file, chỉ cần truyền trực tiếp
+        pdf_file_data = {
+            'mime_type': 'application/pdf',
+            'data': uploaded_file.getvalue()
+        }
+        
+        prompt_text = PROMPT_QUIZ.format(
+            num_questions=num_questions,
+            focus_topic=focus_topic if focus_topic else "toàn bộ tài liệu"
+        )
+        
+        response = model.generate_content([prompt_text, pdf_file_data])
+        
+        # Kiểm tra xem có phản hồi không trước khi xử lý
+        if not response.text:
+             # Cố gắng tìm lý do bị chặn
+            try:
+                block_reason = response.prompt_feedback.block_reason.name
+                return f"❌ Yêu cầu đã bị chặn với lý do: {block_reason}. Vui lòng thử lại với một tài liệu khác."
+            except Exception:
+                 return "❌ AI đã trả về một phản hồi trống. Vui lòng thử lại."
+
+        clean_response = response.text.strip()
+        start_index = clean_response.find('[')
+        end_index = clean_response.rfind(']')
+        
+        if start_index != -1 and end_index != -1:
+            json_string = clean_response[start_index:end_index+1]
+            quiz_data = json.loads(json_string)
+            return quiz_data
+        else:
+            return "❌ Không tìm thấy dữ liệu câu hỏi hợp lệ trong phản hồi của AI."
+
+    except Exception as e:
+        error_details = f"Lỗi: {str(e)}"
+        # Cố gắng truy cập response parts để tìm lý do bị chặn nếu có
+        try:
+            if response and response.prompt_feedback and response.prompt_feedback.block_reason:
+                 error_details += f" | Lý do bị chặn: {response.prompt_feedback.block_reason.name}"
+        except AttributeError:
+             pass # Bỏ qua nếu không có thuộc tính này
+            
+        return f"❌ Đã xảy ra lỗi khi tạo câu hỏi. {error_details}"
