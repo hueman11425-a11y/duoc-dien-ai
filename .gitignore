@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
+*.pyc
 
 # Virtual environment
 venv/
@@ -11,6 +12,7 @@ env/
 .env/
 
 # Streamlit secrets and config
+.streamlit/secrets.toml
 /.streamlit/secrets.toml
 /.streamlit/*.json
 /.streamlit/config.toml
