@@ -5,3 +5,6 @@ gspread-dataframe
 pandas
 biopython
 Pyrebase4
+pyperclip
+markdown2
+pywin32

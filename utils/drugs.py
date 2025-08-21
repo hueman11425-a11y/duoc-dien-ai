@@ -22,7 +22,7 @@ def get_drug_info_from_api(drug_name, is_pro_user=False):
     full_prompt = f"{PROMPT_REGULAR}\n\nHãy tra cứu và trình bày thông tin cho thuốc sau đây: **{hoat_chat_goc}**"
     response_phan_tich = analysis_model.generate_content(full_prompt, generation_config=generation_config)
     base_response_text = response_phan_tich.text
-    final_response = f"✅ Hoạt chất đã nhận diện: **{hoat_chat_goc}**\n\n---\n\n{base_response_text}"
+    final_response = f"{hoat_chat_goc}\n\n---\n\n{base_response_text}"
 
     if is_pro_user:
         section_11_content = "\n\n---\n\n**11. Phân tích các Nghiên cứu Lâm sàng nổi bật (trong 2 năm gần đây):**\n"

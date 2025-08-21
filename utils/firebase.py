@@ -1,5 +1,6 @@
 import streamlit as st
 from utils.constants import HISTORY_LIMIT, COLLECTION_LIMIT, DRUGS_PER_COLLECTION_LIMIT
+from html import unescape
 
 def load_user_data(db, user_info):
     try:
@@ -92,10 +93,17 @@ def add_drug_to_collection(db, user_info, collection_name, drug_name):
         if not is_pro and len(drug_list) >= DRUGS_PER_COLLECTION_LIMIT:
             return f"Bộ sưu tập '{collection_name}' đã đầy (tối đa {DRUGS_PER_COLLECTION_LIMIT} thuốc)."
 
-        drug_list.append(drug_name)
+
+        drug_name_clean = unescape(drug_name).strip()
+        if not drug_name_clean:
+            return "Tên thuốc không hợp lệ."
+        if drug_name_clean in drug_list:
+            return f"'{drug_name_clean}' đã có trong bộ sưu tập này."
+        drug_list.append(drug_name_clean)
         collections[collection_name] = drug_list
         db.child("user_data").child(user_id).child("collections").set(collections, token=token)
         return f"Đã thêm '{drug_name}' vào '{collection_name}'."
+   
     except Exception as e:
         return f"Đã xảy ra lỗi không xác định: {e}"
 
