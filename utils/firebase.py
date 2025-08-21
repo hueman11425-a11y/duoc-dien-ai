@@ -7,7 +7,7 @@ def load_user_data(db, user_info):
         token = user_info['idToken']
         data = db.child("user_data").child(user_id).get(token=token).val()
         if not data:
-            return [], {}, False
+            return [], {}  # chỉ 2 giá trị
         history = data.get("history", [])
         collections = data.get("collections", {})
         is_pro = data.get("is_pro", False)
@@ -16,6 +16,7 @@ def load_user_data(db, user_info):
         return history, collections
     except Exception:
         return [], {}
+    
 
 def load_user_result(db, user_info, drug_name):
     try:
