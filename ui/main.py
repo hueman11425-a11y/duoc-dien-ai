@@ -1,16 +1,16 @@
 import streamlit as st
 from utils import drugs, firebase, constants, prescription
-import markdown2
-import win32clipboard
+import pyperclip  # copy cross-platform
 import re
 
 # ===========================
-# HÀM HỖ TRỢ: Chuẩn hóa danh sách số và Markdown → HTML
+# HÀM HỖ TRỢ: Chuẩn hóa danh sách số
 # ===========================
-def normalize_numbered_list(text: str) -> str:
+def normalize_plain_text(text: str) -> str:
     """
-    Chuẩn hóa các dòng bắt đầu bằng số + '.'.
-    Bỏ các dòng trống.
+    - Chuẩn hóa các dòng bắt đầu bằng số + '.'
+    - Bỏ các dòng trống
+    - Loại bỏ ký tự Markdown như **, *, _, #
     """
     lines = text.splitlines()
     new_lines = []
@@ -18,39 +18,28 @@ def normalize_numbered_list(text: str) -> str:
         line_strip = line.strip()
         if not line_strip:
             continue
+        # Chuẩn hóa danh sách số
         match = re.match(r'^(\d+)\.\s*(\S.+)$', line_strip)
         if match:
-            new_lines.append(f"{match.group(1)}. {match.group(2)}")
-        else:
-            new_lines.append(line_strip)
+            line_strip = f"{match.group(1)}. {match.group(2)}"
+        # Bỏ ký tự markdown
+        line_strip = re.sub(r'[*_#`]', '', line_strip)
+        new_lines.append(line_strip)
     return "\n".join(new_lines)
 
-def generate_styled_html(markdown_text: str) -> str:
+def copy_plain_text_to_clipboard(text: str):
     """
-    Convert Markdown → HTML đẹp, giữ danh sách số,
-    loại bỏ dòng trống, áp dụng font Segoe UI inline.
+    Sao chép plain text đã được chuẩn hóa (không còn ** hay *) vào clipboard
     """
-    lines = [l for l in markdown_text.splitlines() if l.strip()]
-    markdown_text = "\n".join(lines)
-    markdown_text = normalize_numbered_list(markdown_text)
-    html_body = markdown2.markdown(
-        markdown_text,
-        extras=["fenced-code-blocks", "tables", "break-on-newline"]
-    )
-    html = f'<div style="font-family:\'Segoe UI\'; font-size:12pt; color:#222; line-height:1.5;">{html_body}</div>'
-    return html
-
-def copy_html_to_clipboard(html: str):
-    """
-    Copy HTML vào clipboard (Windows) chuẩn CF_HTML
-    """
-    html_bytes = html.encode("utf-8")
-    win32clipboard.OpenClipboard()
-    win32clipboard.EmptyClipboard()
-    fmt = win32clipboard.RegisterClipboardFormat("HTML Format")
-    win32clipboard.SetClipboardData(fmt, html_bytes)
-    win32clipboard.CloseClipboard()
-
+    try:
+        plain_text = normalize_plain_text(text)
+        pyperclip.copy(plain_text)
+        return True
+    except Exception as e:
+        st.error(f"Lỗi khi sao chép: {str(e)}")
+        return False
+    
+    
 # ===========================
 # TRANG TRA CỨU THUỐC
 # ===========================
@@ -66,7 +55,7 @@ def render_lookup_page():
         with st.spinner(f"Đang tra cứu '{drug_name}'..."):
             api_result, identified_name = drugs.get_drug_info_from_api(drug_name, is_pro)
             st.session_state.query_result = api_result
-            st.session_state.identified_name = identified_name  # ← lưu vào session_state
+            st.session_state.identified_name = identified_name
 
             if identified_name and "không được nhận dạng" not in api_result:
                 if is_logged_in:
@@ -104,12 +93,8 @@ def render_lookup_page():
             st.markdown(rest.replace("\n", "  \n"))
 
             if st.button("📋 Sao chép kết quả", key="copy_button"):
-                try:
-                    html_content = generate_styled_html(result_text)
-                    copy_html_to_clipboard(html_content)
+                if copy_plain_text_to_clipboard(result_text):
                     st.success("✅ Đã sao chép vào clipboard")
-                except Exception as e:
-                    st.error(f"❌ Không thể sao chép: {e}")
 
             # ===== Thêm thuốc vào bộ sưu tập =====
             if is_logged_in and st.session_state.get("identified_name"):
@@ -173,8 +158,9 @@ def render_prescription_analysis_page():
                 st.session_state.analysis_result = result
 
     if st.session_state.analysis_result:
+        title = "Kết quả Phân tích"
         st.markdown("---")
-        st.subheader("Kết quả Phân tích")
+        st.subheader(title)
         result_text = st.session_state.analysis_result
         if result_text.startswith("❌"):
             st.error(result_text)
@@ -182,9 +168,5 @@ def render_prescription_analysis_page():
             st.markdown(result_text.replace("\n", "  \n"))
 
             if st.button("📋 Sao chép kết quả phân tích", key="copy_analysis_button"):
-                try:
-                    html_content = generate_styled_html(result_text)
-                    copy_html_to_clipboard(html_content)
+                if copy_plain_text_to_clipboard(title + "\n" + result_text):
                     st.success("✅ Đã sao chép vào clipboard")
-                except Exception as e:
-                    st.error(f"❌ Không thể sao chép: {e}")

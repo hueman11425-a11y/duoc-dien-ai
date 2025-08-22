@@ -13,5 +13,6 @@ def get_pro_model():
 
 @st.cache_resource
 def get_prescription_model():
-    model_name = st.secrets.get("models", {}).get("prescription", "gemini-1.5-pro-latest")
+    # model_name = st.secrets.get("models", {}).get("prescription", "gemini-1.5-pro-latest")
+    model_name = st.secrets.get("models", {}).get("prescription", "gemini-1.5-flash-latest")
     return genai.GenerativeModel(model_name)

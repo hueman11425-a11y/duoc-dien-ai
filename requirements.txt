@@ -7,4 +7,4 @@ biopython
 Pyrebase4
 pyperclip
 markdown2
-pywin32
+streamlit-quill
