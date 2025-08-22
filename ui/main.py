@@ -33,7 +33,7 @@ def normalize_plain_text(text: str) -> str:
 # ===========================
 def render_copy_button(label: str, text: str, key: str):
     """
-    Hiển thị nút bấm copy text vào clipboard (client-side, browser) + thông báo thành công.
+    Hiển thị nút bấm copy text vào clipboard (client-side, browser) + thông báo thành công bằng alert.
     """
     plain_text = normalize_plain_text(text).replace("`", "\\`").replace("$", "\\$")
     btn_id = f"copy-btn-{key}"
@@ -43,18 +43,14 @@ def render_copy_button(label: str, text: str, key: str):
                 style="padding:8px 12px; border:none; border-radius:6px; background:#4CAF50; color:white; cursor:pointer;">
             {label}
         </button>
-        <p id="{btn_id}-msg" style="color:green; font-weight:bold;"></p>
         <script>
             const btn = document.getElementById("{btn_id}");
-            const msg = document.getElementById("{btn_id}-msg");
             btn.onclick = async () => {{
                 try {{
                     await navigator.clipboard.writeText(`{plain_text}`);
-                    msg.innerText = "✅ Đã sao chép vào clipboard";
-                    msg.style.color = "green";
+                    alert("✅ Đã sao chép vào clipboard");
                 }} catch (err) {{
-                    msg.innerText = "❌ Lỗi khi sao chép";
-                    msg.style.color = "red";
+                    alert("❌ Lỗi khi sao chép, vui lòng thử lại");
                 }}
             }};
         </script>
