@@ -1,7 +1,7 @@
 import streamlit as st
 from utils import drugs, firebase, constants, prescription
-import pyperclip  # copy cross-platform
 import re
+import streamlit.components.v1 as components
 
 # ===========================
 # HÀM HỖ TRỢ: Chuẩn hóa danh sách số
@@ -27,19 +27,41 @@ def normalize_plain_text(text: str) -> str:
         new_lines.append(line_strip)
     return "\n".join(new_lines)
 
-def copy_plain_text_to_clipboard(text: str):
+
+# ===========================
+# HÀM HỖ TRỢ: Copy vào clipboard (client-side)
+# ===========================
+def render_copy_button(label: str, text: str, key: str):
     """
-    Sao chép plain text đã được chuẩn hóa (không còn ** hay *) vào clipboard
+    Hiển thị nút bấm copy text vào clipboard (client-side, browser) + thông báo thành công.
     """
-    try:
-        plain_text = normalize_plain_text(text)
-        pyperclip.copy(plain_text)
-        return True
-    except Exception as e:
-        st.error(f"Lỗi khi sao chép: {str(e)}")
-        return False
-    
-    
+    plain_text = normalize_plain_text(text).replace("`", "\\`").replace("$", "\\$")
+    btn_id = f"copy-btn-{key}"
+
+    copy_html = f"""
+        <button id="{btn_id}" 
+                style="padding:8px 12px; border:none; border-radius:6px; background:#4CAF50; color:white; cursor:pointer;">
+            {label}
+        </button>
+        <p id="{btn_id}-msg" style="color:green; font-weight:bold;"></p>
+        <script>
+            const btn = document.getElementById("{btn_id}");
+            const msg = document.getElementById("{btn_id}-msg");
+            btn.onclick = async () => {{
+                try {{
+                    await navigator.clipboard.writeText(`{plain_text}`);
+                    msg.innerText = "✅ Đã sao chép vào clipboard";
+                    msg.style.color = "green";
+                }} catch (err) {{
+                    msg.innerText = "❌ Lỗi khi sao chép";
+                    msg.style.color = "red";
+                }}
+            }};
+        </script>
+    """
+    components.html(copy_html, height=60)
+
+
 # ===========================
 # TRANG TRA CỨU THUỐC
 # ===========================
@@ -92,9 +114,8 @@ def render_lookup_page():
             )
             st.markdown(rest.replace("\n", "  \n"))
 
-            if st.button("📋 Sao chép kết quả", key="copy_button"):
-                if copy_plain_text_to_clipboard(result_text):
-                    st.success("✅ Đã sao chép vào clipboard")
+            # Nút copy mới
+            render_copy_button("📋 Sao chép", result_text, key="lookup_copy")
 
             # ===== Thêm thuốc vào bộ sưu tập =====
             if is_logged_in and st.session_state.get("identified_name"):
@@ -123,6 +144,7 @@ def render_lookup_page():
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"❌ Không thể thêm thuốc: {e}")
+
 
 # ===========================
 # TRANG PHÂN TÍCH ĐƠN THUỐC
@@ -167,6 +189,5 @@ def render_prescription_analysis_page():
         else:
             st.markdown(result_text.replace("\n", "  \n"))
 
-            if st.button("📋 Sao chép kết quả phân tích", key="copy_analysis_button"):
-                if copy_plain_text_to_clipboard(title + "\n" + result_text):
-                    st.success("✅ Đã sao chép vào clipboard")
+            # Nút copy mới
+            render_copy_button("📋 Sao chép", title + "\n" + result_text, key="analysis_copy")

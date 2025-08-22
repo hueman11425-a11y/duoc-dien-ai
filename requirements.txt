@@ -5,5 +5,5 @@ gspread-dataframe
 pandas
 biopython
 Pyrebase4
-pyperclip
 markdown2
+pyrebase4
