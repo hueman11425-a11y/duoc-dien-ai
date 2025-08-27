@@ -8,7 +8,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 
 # --- CÁC THAM SỐ CÓ THỂ ĐIỀU CHỈNH ---
-APP_URL = "https://duoc-dien-ai-laz8nqrjyz4arbpqum6nxv.streamlit.app/"
+APP_URL = "https://duoc-dien-ai-dmv8xz6f8dvqsiqhclam8w.streamlit.app/"
 TOTAL_RUN_TIME_MINUTES = 10  # Tổng thời gian kịch bản sẽ chạy (phút)
 REFRESH_INTERVAL_MINUTES = 3   # Khoảng thời gian giữa mỗi lần làm mới (phút)
 # ------------------------------------
